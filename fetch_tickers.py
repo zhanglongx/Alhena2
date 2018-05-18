@@ -3,7 +3,7 @@
 import argparse, os
 import tushare as ts
 
-def save_tickers(path, encoding='utf-8'):
+def save_tickers(path):
 
     try:
         id = ts.get_stock_basics()
@@ -22,7 +22,7 @@ def save_tickers(path, encoding='utf-8'):
         os.mkdir(loc)
 
     try:
-        id.to_csv(csv, sep=',', encoding=encoding)
+        id.to_csv(csv, sep=',')
     except:
         raise OSError('writting %s error' % csv)
 
