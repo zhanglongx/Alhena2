@@ -2,3 +2,6 @@
 Debug/
 
 database/
+test/
+
+test.py
