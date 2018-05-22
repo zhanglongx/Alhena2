@@ -3,7 +3,7 @@
 import os
 import pandas as pd
 
-from Alhena2.misc.const import file_tickers
+from Alhena2.misc.const import (file_tickers)
 
 def check_path(path):
     if not os.path.exists(os.path.join(path, 'database')):
