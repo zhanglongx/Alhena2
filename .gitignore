@@ -4,4 +4,6 @@ Debug/
 database/
 test/
 
+___pycache__/
+*.py[cod]
 test.py
