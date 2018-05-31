@@ -35,7 +35,7 @@ class cn_reader(_base_reader):
         self.path['daily']  = path_daily
         self.path['report'] = path_report
 
-        self.skip_time = 1
+        self.skip_time = 30
         self.skip_size = 10
 
         self.symbols = self._read_symbols(symbols)
@@ -46,6 +46,7 @@ class cn_reader(_base_reader):
 
         # FIXME: multiprocess pool
         for s in self.symbols:
+            print('%s' % s)
             self._cache_url_report(s)
 
     def info(self):
@@ -66,20 +67,20 @@ class cn_reader(_base_reader):
             self._cache_info()
 
         # read from list
-        with open(info_file, mode='r', encoding='utf-8') as f:
-            lines = f.readlines()
+        lines = self._helper_read_buffer(info_file)
             
         all_symbols = []
+        # skip info head
         for l in lines[1:]:
             all_symbols.append(str(l.split(',')[0]))
 
-        if symbols is None:
-            return all_symbols
-        else:
+        if not symbols is None:
             symbols = [str(s) for s in symbols if str(s) in all_symbols]
-            assert len(symbols)
+            assert len(symbols) # can be removed
 
             return symbols
+
+        return all_symbols
     
     def _is_need_udpate(self, file):
 
@@ -140,12 +141,8 @@ class cn_reader(_base_reader):
         file = os.path.join(self.path['report'], '%s.csv' % sym)
 
         if not self._is_need_udpate(file):
-
-            with open(file, mode='r') as f:
-                lines = f.readlines()
-
-            if self.__is_integrity_report(lines):
-                return
+            # FIXME: more check, parse is in Quarter
+            return
 
         tables = []
         for type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
@@ -167,4 +164,5 @@ class cn_reader(_base_reader):
 
             tables.append(t)
 
-        pd.concat(tables).to_csv(file, sep=',', encoding=self.encoding)
+        all = pd.concat(tables, axis=1)
+        all.to_csv(file, sep=',', encoding=self.encoding)

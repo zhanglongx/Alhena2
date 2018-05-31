@@ -27,7 +27,7 @@ class _base_reader(object):
     __metaclass__ = ABCMeta
     def __init__(self, path, symbols, start=None, end=None, retries=-1):
 
-        self.path = dict({'base': path})
+        self.path  = dict({'base': path})
         self._root = self._check_root_path(path)
 
         # leave to subclasses
@@ -60,10 +60,10 @@ class _base_reader(object):
     def report(self):
         raise NotImplementedError
 
-    def __cb_checked_read_buffer(self):
+    def __cb_read_buffer(self, category=None):
         return False
 
-    def _checked_read_buffer(self, file):
+    def _helper_read_buffer(self, file, category=None):
         '''
             file:
         '''
@@ -73,12 +73,12 @@ class _base_reader(object):
         with open(file, mode='r', encoding=self.encoding) as f:
             lines = f.readlines()
 
-        if self.__cb_checked_read_buffer():
+        if self.__cb_read_buffer(category):
             raise OSError('file %s may be corrupted' % file)
 
         return lines
 
-    def _save_buffer(self, buffer, file):
+    def _helper_save_buffer(self, buffer, file):
         # FIXME:
         raise NotImplementedError
 
