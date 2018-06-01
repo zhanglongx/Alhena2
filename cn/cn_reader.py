@@ -45,8 +45,8 @@ class cn_reader(_base_reader):
         self._cache_info()
 
         # FIXME: multiprocess pool
-        for s in self.symbols:
-            print('%s' % s)
+        for (i, s) in enumerate(self.symbols):
+            self._helper_progress_bar(i, len(self.symbols))
             self._cache_url_report(s)
 
     def info(self):
@@ -164,5 +164,4 @@ class cn_reader(_base_reader):
 
             tables.append(t)
 
-        all = pd.concat(tables, axis=1)
-        all.to_csv(file, sep=',', encoding=self.encoding)
+        pd.concat(tables, axis=1).to_csv(file, sep=',', encoding=self.encoding)
