@@ -53,7 +53,7 @@ class _base_reader(object):
         raise NotImplementedError
 
     @abstractmethod
-    def daily(self):
+    def daily(self, subjects=None, ex=None, freq='D'):
         raise NotImplementedError
 
     @abstractmethod
@@ -120,7 +120,7 @@ class _base_reader(object):
         # copied from https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
 
         # Print iterations progress
-        def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+        def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>'):
             """
             Call in a loop to create terminal progress bar
             @params:

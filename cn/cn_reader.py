@@ -1,6 +1,6 @@
 # coding: utf-8
 
-import os, time, io
+import os, time, io, sys
 import re
 import pandas as pd 
 import tushare as ts
@@ -52,8 +52,10 @@ class cn_reader(_base_reader):
     def info(self):
         pass
 
-    def daily(self):
-        pass
+    def daily(self, subjects=None, ex=None, freq='D'):
+        
+        # tempz
+        return self._read_one_daily(self.symbols[0], subjects=subjects, ex=ex, freq=freq)
 
     def report(self):
         pass
@@ -62,7 +64,8 @@ class cn_reader(_base_reader):
 
         info_file = os.path.join(self.path['info'], 'info.csv')
 
-        # FIXME: always update info? current ignore very new input symbols
+        # FIXME: always update info? currently may ignore some 
+        #        very new input symbols
         if not os.path.exists(info_file):
             self._cache_info()
 
@@ -75,8 +78,8 @@ class cn_reader(_base_reader):
             all_symbols.append(str(l.split(',')[0]))
 
         if not symbols is None:
-            symbols = [str(s) for s in symbols if str(s) in all_symbols]
-            assert len(symbols) # can be removed
+            symbols = [str(s) for s in symbols if s in all_symbols]
+            assert len(symbols) # prevent ill-input, but can be removed
 
             return symbols
 
@@ -165,3 +168,32 @@ class cn_reader(_base_reader):
             tables.append(t)
 
         pd.concat(tables, axis=1).to_csv(file, sep=',', encoding=self.encoding)
+
+    def _read_one_daily(self, symbol, subjects=None, ex=None, freq='D'):
+
+        file = os.path.join(self.path['daily'], symbol + '.csv')
+
+        # FIXME:
+        if not os.path.exists(file):
+            sys.stderr.write(file + ' does not exsit')
+            return None
+
+        all = self._helper_read_buffer(file)
+
+        # copied from Alhena
+        r = re.compile(r'^#\s+(\d+-\d+-\d+,[.0-9]+,[.0-9]+,[.0-9]+)')
+
+        lines_ex = []
+        i_daily = 0
+        for (i, l) in enumerate(all):
+            m = r.match(l)
+            if m:
+                lines_ex.append(m.group(1))
+            elif i > 1:
+                i_daily = i
+                break 
+
+        lines_daily = all[i_daily:]
+
+        print(lines_ex)
+        print(lines_daily)
