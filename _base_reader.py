@@ -99,10 +99,12 @@ class _base_reader(object):
 
     def _helper_get_one_url(self, url, param=None, encoding='utf-8'):
         '''
-            url:
-            param: 
-            encoding: {str}
-                return result in 'encoding'
+        Parameters
+        ----------
+        url: {str}
+        param: 
+        encoding: {str}
+            return result in 'encoding'
         '''
         if not param is None:
             raise NotImplementedError

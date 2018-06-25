@@ -2,6 +2,7 @@
 
 import os, time, io, sys
 import re
+import numpy as np
 import pandas as pd 
 import tushare as ts
 
@@ -50,7 +51,16 @@ class cn_reader(_base_reader):
             self._cache_url_report(s)
 
     def info(self):
-        pass
+
+        info_file = os.path.join(self.path['info'], 'info.csv')
+
+        if not os.path.exists(info_file):
+            raise OSError('info file %s not exist (may update first?)' % file)
+
+        info = pd.read_csv(info_file, header=0, dtype={'code': str}, encoding=self.encoding)
+        info.set_index('code', inplace=True)
+
+        return info.loc[self.symbols]
 
     def daily(self, subjects=None, ex=None, freq='D'):
         
@@ -122,7 +132,7 @@ class cn_reader(_base_reader):
         try:
             id.to_csv(file, sep=',', encoding=self.encoding)
         except:
-            raise OSError('writting %s error' % file)
+            raise OSError('writing %s error' % file)
 
     @staticmethod
     def __is_integrity_report(text):
@@ -169,16 +179,65 @@ class cn_reader(_base_reader):
 
         pd.concat(tables, axis=1).to_csv(file, sep=',', encoding=self.encoding)
 
+    # XXX: deprecated for Alhena1 daily database only
+    def __inv_ex(self, lines_ex, lines_daily):
+        '''
+        Parameters
+        ----------
+        lines_ex: {plain text list}
+            ex info in text format
+        lines_daily: {plain text list}
+            daily info in text format
+        '''
+
+        columns = ['gift', 'donation', 'bouns']
+        df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
+                            names=columns, parse_dates=True, encoding=self.encoding)
+
+        columns = ['open', 'high', 'low', 'close', 'vol', 'equity']
+        df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
+                               names=columns, parse_dates=True, encoding=self.encoding)
+
+        def __one_inv_ex(series, gift, donation, bouns):
+            return series * ( 1 + gift / 10 + donation / 10 ) + bouns / 10
+
+        for xdr_date in df_ex.index.values:
+
+            end = xdr_date - np.timedelta64(1, 'D')
+            select = df_daily.loc[:end]
+
+            gift     = (df_ex.loc[xdr_date])['gift']
+            donation = (df_ex.loc[xdr_date])['donation']
+            bouns    = (df_ex.loc[xdr_date])['bouns']
+
+            df_daily.loc[:end, 'open'] = __one_inv_ex(df_daily.loc[:end, 'open'], \
+                                                      gift=gift, donation=donation, bouns=bouns)
+            df_daily.loc[:end, 'high'] = __one_inv_ex(df_daily.loc[:end, 'high'], \
+                                                      gift=gift, donation=donation, bouns=bouns)
+            df_daily.loc[:end, 'low'] = __one_inv_ex(df_daily.loc[:end, 'low'], \
+                                                      gift=gift, donation=donation, bouns=bouns)
+            df_daily.loc[:end, 'close'] = __one_inv_ex(df_daily.loc[:end, 'close'], \
+                                                      gift=gift, donation=donation, bouns=bouns)
+
+            # FIXME: vol
+
+        return df_daily
+
     def _read_one_daily(self, symbol, subjects=None, ex=None, freq='D'):
+
+        if subjects == None:
+            subjects = ['close']
 
         file = os.path.join(self.path['daily'], symbol + '.csv')
 
         # FIXME:
         if not os.path.exists(file):
-            sys.stderr.write(file + ' does not exsit')
+            sys.stderr.write(file + ' does not exist')
             return None
 
         all = self._helper_read_buffer(file)
+
+        # FIXME: version check
 
         # copied from Alhena
         r = re.compile(r'^#\s+(\d+-\d+-\d+,[.0-9]+,[.0-9]+,[.0-9]+)')
@@ -195,5 +254,10 @@ class cn_reader(_base_reader):
 
         lines_daily = all[i_daily:]
 
-        print(lines_ex)
-        print(lines_daily)
+        df_daily = self.__inv_ex(lines_ex, lines_daily)
+
+        if freq.lower() == 'd':
+            # as 'D', only provide original data, no fill
+            return df_daily[subjects]
+        else:
+            return df_daily.asfreq(freq, method='ffill')[subjects]
