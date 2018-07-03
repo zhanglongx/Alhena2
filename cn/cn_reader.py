@@ -50,6 +50,8 @@ class cn_reader(_base_reader):
             self._helper_progress_bar(i, len(self.symbols))
             self._cache_url_report(s)
 
+        sys.stderr.write('cn-daily update has not been implemented')
+
     def info(self):
 
         info_file = os.path.join(self.path['info'], 'info.csv')
@@ -64,11 +66,29 @@ class cn_reader(_base_reader):
 
     def daily(self, subjects=None, ex=None, freq='D'):
         
-        # tempz
-        return self._read_one_daily(self.symbols[0], subjects=subjects, ex=ex, freq=freq)
+        keys   = []
+        result = []
+        for sym in self.symbols:
 
-    def report(self):
-        pass
+            t = self._read_one_daily(sym, subjects=subjects, ex=ex, freq=freq)
+            if not t is None:
+                keys.append(sym)
+                result.append(t)
+
+        return pd.concat(result, keys=keys, names=['symbols', 'date'])
+
+    def report(self, subjects=None):
+        
+        keys   = []
+        result = []
+        for sym in self.symbols:
+
+            t = self._read_one_report(sym, subjects=subjects)
+            if not t is None:
+                keys.append(sym)
+                result.append(t)
+
+        return pd.concat(result, keys=keys, names=['symbols', 'date'])
 
     def _read_symbols(self, symbols=None):
 
@@ -240,15 +260,19 @@ class cn_reader(_base_reader):
         # FIXME: version check
 
         # copied from Alhena
-        r = re.compile(r'^#\s+(\d+-\d+-\d+,[.0-9]+,[.0-9]+,[.0-9]+)')
+        # about '20' things: workaround for duplicated items
+        r  = re.compile(r'^#\s+(\d+-\d+-\d+,[.0-9]+,[.0-9]+,[.0-9]+)')
+        r1 = re.compile(r'20\d\d-\d+-\d+')
 
         lines_ex = []
         i_daily = 0
         for (i, l) in enumerate(all):
             m = r.match(l)
             if m:
-                lines_ex.append(m.group(1))
-            elif i > 1:
+                entry = m.group(1)
+                if r1.match(entry):
+                    lines_ex.append(entry)
+            elif i > 0:
                 i_daily = i
                 break 
 
@@ -261,3 +285,39 @@ class cn_reader(_base_reader):
             return df_daily[subjects]
         else:
             return df_daily.asfreq(freq, method='ffill')[subjects]
+
+    def _read_one_report(self, symbol, subjects=None):
+
+        file = os.path.join(self.path['report'], symbol + '.csv')
+
+        # FIXME:
+        if not os.path.exists(file):
+            sys.stderr.write(file + ' does not exist')
+            return None
+
+        def __sanitize(lines):
+
+            # FIXME: workaround for 002886: '20141231.1',
+            #        use dot version?
+            r = re.compile(r'^(\d+)\.\d+,')
+
+            return [l for l in lines if not r.match(l)]
+
+        all = __sanitize(self._helper_read_buffer(file))
+
+        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all])), 
+                             header=0, index_col=0, parse_dates=True, \
+                             encoding=self.encoding)
+
+        daily = self._read_one_daily(symbol, subjects=['close'], freq='Q')
+
+        df = pd.concat([report, daily], axis=1)
+
+        # unification
+        df.rename(columns = {'实收资本(或股本)': '股本'}, inplace=True)
+
+        df['PE']  = df['close'] / df['基本每股收益(元/股)']
+        df['ROE'] = df['五、净利润'] / (df['资产总计'] - df['负债合计'])
+        df['PB']  = (df['close'] * df['股本']) / (df['资产总计'] - df['负债合计'])
+
+        return df
