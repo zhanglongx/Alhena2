@@ -1,8 +1,9 @@
 import datetime as dt
 
 import requests
+import numpy as np
 from pandas import to_datetime
-from pandas_datareader.compat import is_number
+from numbers import Number
 from requests_file import FileAdapter
 from requests_ftp import FTPAdapter
 
@@ -48,3 +49,26 @@ def _init_session(session, retry_count=3):
         session.mount('ftp://', FTPAdapter())
         # do not set requests max_retries here to support arbitrary pause
     return session
+
+def is_number(obj):
+    """
+    Check if the object is a number.
+
+    Parameters
+    ----------
+    obj : The object to check.
+
+    Returns
+    -------
+    is_number : bool
+        Whether `obj` is a number or not.
+
+    Examples
+    --------
+    >>> is_number(1)
+    True
+    >>> is_number("foo")
+    False
+    """
+
+    return isinstance(obj, (Number, np.number))

@@ -5,6 +5,8 @@ Debug/
 *.pyproj
 *.user
 
+*.h5
+
 database/
 test/
 
