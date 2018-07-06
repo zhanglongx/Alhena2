@@ -57,7 +57,7 @@ class _base_reader(object):
         raise NotImplementedError
 
     @abstractmethod
-    def report(self):
+    def report(self, subjects=None):
         raise NotImplementedError
 
     def __cb_read_buffer(self, category=None):

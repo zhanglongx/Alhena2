@@ -1,6 +1,6 @@
 # coding: utf-8
 
-import sys, argparse
+import os, sys, argparse
 from abc import (ABCMeta, abstractmethod)
 
 import Alhena2.cn.cn_reader as cn_reader
@@ -68,11 +68,22 @@ class cn(_base):
 
         if self.file is None:
             raise ValueError('file is none')
+        elif os.path.exists(self.file):
+            os.remove(self.file)
 
-        df = cn_reader.cn_reader(self.path).report(subjects=None)
+        r = cn_reader.cn_reader(self.path)
 
-        # FIXME: add info, daily
-        df.to_hdf(self.file, key='cn', mode='w')
+        info = r.info()
+
+        info.to_hdf(self.file, key='info', mode='a')
+
+        daily = r.daily(subjects=None)
+
+        daily.to_hdf(self.file, key='daily', mode='a')
+
+        report = r.report(subjects=None)
+
+        report.to_hdf(self.file, key='report', mode='a')
 
 if __name__ == '__main__':
 
