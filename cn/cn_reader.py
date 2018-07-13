@@ -200,23 +200,15 @@ class cn_reader(_base_reader):
         pd.concat(tables, axis=1).to_csv(file, sep=',', encoding=self.encoding)
 
     # XXX: deprecated for Alhena1 daily database only
-    def __inv_ex(self, lines_ex, lines_daily):
+    def __inv_ex(self, df_ex, df_daily):
         '''
         Parameters
         ----------
-        lines_ex: {plain text list}
-            ex info in text format
-        lines_daily: {plain text list}
-            daily info in text format
+        df_ex: {pd.Dataframe}
+            ex info in dataframe format
+        df_daily: {pd.Dataframe}
+            daily info in dataframe format
         '''
-
-        columns = ['gift', 'donation', 'bouns']
-        df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
-                            names=columns, parse_dates=True, encoding=self.encoding)
-
-        columns = ['open', 'high', 'low', 'close', 'vol', 'equity']
-        df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
-                               names=columns, parse_dates=True, encoding=self.encoding)
 
         def __one_inv_ex(series, gift, donation, bouns):
             return series * ( 1 + gift / 10 + donation / 10 ) + bouns / 10
@@ -278,7 +270,23 @@ class cn_reader(_base_reader):
 
         lines_daily = all[i_daily:]
 
-        df_daily = self.__inv_ex(lines_ex, lines_daily)
+        columns = ['open', 'high', 'low', 'close', 'vol', 'equity']
+        df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
+                               names=columns, parse_dates=True, encoding=self.encoding)
+
+        if ex is None:
+
+            columns = ['gift', 'donation', 'bouns']
+            df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
+                                names=columns, parse_dates=True, encoding=self.encoding)
+
+            df_daily = self.__inv_ex(df_ex=df_ex, df_daily=df_daily)
+
+        elif ex == 'backward':
+            # XXX: df_daily is backward
+            pass
+        else:
+            raise ValueError('%s is not supported' % ex)
 
         if freq.lower() == 'd':
             # as 'D', only provide original data, no fill
