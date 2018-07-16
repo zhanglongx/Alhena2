@@ -1,5 +1,9 @@
 .vs/
+.vscode/
+.idea/
 Debug/
+
+.env
 
 *.sln
 *.pyproj

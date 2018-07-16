@@ -57,7 +57,7 @@ class cn_reader(_base_reader):
         info_file = os.path.join(self.path['info'], 'info.csv')
 
         if not os.path.exists(info_file):
-            raise OSError('info file %s not exist (may update first?)' % file)
+            raise OSError('info file %s not exist (may update first?)' % info_file)
 
         info = pd.read_csv(info_file, header=0, dtype={'code': str}, encoding=self.encoding)
         info.set_index('code', inplace=True)
@@ -216,7 +216,6 @@ class cn_reader(_base_reader):
         for xdr_date in df_ex.index.values:
 
             end = xdr_date - np.timedelta64(1, 'D')
-            select = df_daily.loc[:end]
 
             gift     = (df_ex.loc[xdr_date])['gift']
             donation = (df_ex.loc[xdr_date])['donation']

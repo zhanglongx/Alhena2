@@ -58,7 +58,7 @@ class _base(object):
 class cn(_base):
 
     def __init__(self, path, file):
-        return super().__init__(path, file)
+        super().__init__(path, file)
 
     def update(self):
         if not super().update() == True:
