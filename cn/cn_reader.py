@@ -159,7 +159,7 @@ class cn_reader(_base_reader):
         # try parse the fisrt line
         first_line = text.split('\n', maxsplit=1)[0]
 
-        r = re.compile('^报表日期\s+\d{8}\s+')
+        r = re.compile(r'^报表日期\s+\d{8}\s+')
         if not r.match(first_line):
             return False
 
