@@ -1,7 +1,6 @@
 # coding: utf-8
 
 import os
-import io
 
 from abc import (ABCMeta, abstractmethod)
 
@@ -102,7 +101,7 @@ class _base_reader(object):
         Parameters
         ----------
         url: {str}
-        param: 
+        param:
         encoding: {str}
             return result in 'encoding'
         '''
@@ -139,7 +138,7 @@ class _base_reader(object):
             bar = fill * filledLength + '-' * (length - filledLength)
             print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
             # Print New Line on Complete
-            if iteration == total: 
+            if iteration == total:
                 print()
 
         return printProgressBar(iteration=inter, total=total, prefix='Progress:', suffix='Complete', length=30)

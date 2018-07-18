@@ -3,7 +3,7 @@
 import os, time, io, sys
 import re
 import numpy as np
-import pandas as pd 
+import pandas as pd
 import tushare as ts
 
 from Alhena2._base_reader import (_base_reader)
@@ -42,7 +42,7 @@ class cn_reader(_base_reader):
         self.symbols = self._read_symbols(symbols)
 
     def update(self):
-        
+
         self._cache_info()
 
         # FIXME: multiprocess pool
@@ -65,7 +65,7 @@ class cn_reader(_base_reader):
         return info.loc[self.symbols]
 
     def daily(self, subjects=None, ex=None, freq='D'):
-        
+
         keys   = []
         result = []
         for sym in self.symbols:
@@ -78,7 +78,7 @@ class cn_reader(_base_reader):
         return pd.concat(result, keys=keys, names=['symbols', 'date'])
 
     def report(self, subjects=None):
-        
+
         keys   = []
         result = []
         for sym in self.symbols:
@@ -94,14 +94,14 @@ class cn_reader(_base_reader):
 
         info_file = os.path.join(self.path['info'], 'info.csv')
 
-        # FIXME: always update info? currently may ignore some 
+        # FIXME: always update info? currently may ignore some
         #        very new input symbols
         if not os.path.exists(info_file):
             self._cache_info()
 
         # read from list
         lines = self._helper_read_buffer(info_file)
-            
+
         all_symbols = []
         # skip info head
         for l in lines[1:]:
@@ -114,7 +114,7 @@ class cn_reader(_base_reader):
             return symbols
 
         return all_symbols
-    
+
     def _is_need_udpate(self, file):
 
         if not os.path.exists(file):
@@ -140,17 +140,17 @@ class cn_reader(_base_reader):
             return
 
         try:
-            id = ts.get_stock_basics()
+            ts_id = ts.get_stock_basics()
         except:
             raise ConnectionError('getting info from tushare failed')
 
-        id.sort_index(inplace=True)
+        ts_id.sort_index(inplace=True)
 
         # fix prefix 0
-        id.index.astype(str)
+        ts_id.index.astype(str)
 
         try:
-            id.to_csv(file, sep=',', encoding=self.encoding)
+            ts_id.to_csv(file, sep=',', encoding=self.encoding)
         except:
             raise OSError('writing %s error' % file)
 
@@ -178,9 +178,9 @@ class cn_reader(_base_reader):
             return
 
         tables = []
-        for type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
+        for table_type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
 
-            url = URL_TEMPLATE % (type, sym)
+            url = URL_TEMPLATE % (table_type, sym)
 
             while(1):
                 (text, raw) = self._helper_get_one_url(url, None, 'gb2312') # tempz
@@ -236,7 +236,7 @@ class cn_reader(_base_reader):
 
     def _read_one_daily(self, symbol, subjects=None, ex=None, freq='D'):
 
-        if subjects == None:
+        if subjects is None:
             subjects = ['close']
 
         file = os.path.join(self.path['daily'], symbol + '.csv')
@@ -265,7 +265,7 @@ class cn_reader(_base_reader):
                     lines_ex.append(entry)
             elif i > 0:
                 i_daily = i
-                break 
+                break
 
         lines_daily = all[i_daily:]
 
@@ -310,9 +310,9 @@ class cn_reader(_base_reader):
 
             return [l for l in lines if not r.match(l)]
 
-        all = __sanitize(self._helper_read_buffer(file))
+        all_lines = __sanitize(self._helper_read_buffer(file))
 
-        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all])), 
+        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all_lines])), 
                              header=0, index_col=0, parse_dates=True, \
                              encoding=self.encoding)
 
@@ -327,4 +327,7 @@ class cn_reader(_base_reader):
         df['ROE'] = df['五、净利润'] / (df['资产总计'] - df['负债合计'])
         df['PB']  = (df['close'] * df['股本']) / (df['资产总计'] - df['负债合计'])
 
-        return df
+        if subjects is None:
+            return df
+        else:
+            return df[subjects]
