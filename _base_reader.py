@@ -7,7 +7,7 @@ from abc import (ABCMeta, abstractmethod)
 from Alhena2._network import (_get_one_url)
 from Alhena2._utils   import (_sanitize_dates)
 
-class _base_reader(object):
+class _base_reader():
     """
     Parameters
     ----------
@@ -35,7 +35,7 @@ class _base_reader(object):
         (start, end) = _sanitize_dates(start, end)
         self.start = start
         self.end   = end
-        
+
         if retries < -1:
             retries = -1
 

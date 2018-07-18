@@ -312,7 +312,7 @@ class cn_reader(_base_reader):
 
         all_lines = __sanitize(self._helper_read_buffer(file))
 
-        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all_lines])), 
+        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all_lines])),
                              header=0, index_col=0, parse_dates=True, \
                              encoding=self.encoding)
 

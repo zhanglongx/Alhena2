@@ -5,7 +5,7 @@ from abc import (ABCMeta, abstractmethod)
 
 import Alhena2.cn.cn_reader as cn_reader
 
-class _base(object):
+class _base():
 
     __metaclass__ = ABCMeta
     def __init__(self, path, file):
@@ -61,7 +61,7 @@ class cn(_base):
         super().__init__(path, file)
 
     def update(self):
-        if not super().update() == True:
+        if not super().update() is True:
             return False
 
         return True
