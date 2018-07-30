@@ -229,9 +229,6 @@ class cn_reader(_base_reader):
                                                      gift=gift, donation=donation, bouns=bouns)
             df_daily.loc[:end, 'close'] = __one_inv_ex(df_daily.loc[:end, 'close'], \
                                                        gift=gift, donation=donation, bouns=bouns)
-
-            df_daily.loc[end, 'bouns'] = bouns
-
             # FIXME: vol
 
         return df_daily
@@ -289,6 +286,9 @@ class cn_reader(_base_reader):
         else:
             raise ValueError('%s is not supported' % ex)
 
+        # combine with ex-info
+        df_daily = pd.concat([df_daily, df_ex], axis=1)
+
         if freq.lower() == 'd':
             # as 'D', only provide original data, no fill
             return df_daily[subjects]
@@ -326,9 +326,9 @@ class cn_reader(_base_reader):
         df.rename(columns = {'实收资本(或股本)': '股本'}, inplace=True)
 
         df['PE']   = df['close'] / df['基本每股收益(元/股)']
-        df['ROE']  = df['归属于母公司所有者的净利润'] / df['归属于母公司股东权益合计']
-        df['PB']   = (df['close'] * df['股本']) / df['归属于母公司股东权益合计']
-        df['CASH'] = (df['经营活动产生的现金流量净额']) / df['五、净利润']
+        df['ROE']  = df['五、净利润'] / (df['资产总计'] - df['负债合计'])
+        df['PB']   = (df['close'] * df['股本']) / (df['资产总计'] - df['负债合计'])
+        df['CASH'] = df['经营活动产生的现金流量净额'] / df['五、净利润']
 
         if subjects is None:
             return df
