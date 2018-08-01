@@ -12,7 +12,7 @@ class cn_extractor(_base_extractor):
     def __init__(self, path, symbols=None, start='2007-01-01', end=None, subjects=None, add_group=None, asfreq=None):
 
         super().__init__(path=path, symbols=symbols, start=start, end=end, \
-                         add_group=add_group, asfreq=asfreq)
+                         subjects=subjects, add_group=add_group, asfreq=asfreq)
 
         all_cn = os.path.join(self.path, ALL_CN)
 
