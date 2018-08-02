@@ -272,16 +272,14 @@ class cn_reader(_base_reader):
         df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
                                names=columns, parse_dates=True, encoding=self.encoding)
 
+        columns = ['gift', 'donation', 'bouns']
+        df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
+                            names=columns, parse_dates=True, encoding=self.encoding)
+
         if ex is None:
-
-            columns = ['gift', 'donation', 'bouns']
-            df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
-                                names=columns, parse_dates=True, encoding=self.encoding)
-
             df_daily = self.__inv_ex(df_ex=df_ex, df_daily=df_daily)
-
         elif ex == 'backward':
-            # XXX: df_daily is backward
+            # XXX: df_daily is backward default
             pass
         else:
             raise ValueError('%s is not supported' % ex)
