@@ -1,6 +1,7 @@
 # -*- coding=utf-8 -*-
 
 import os
+import re
 import pandas as pd
 
 from Alhena2.cn.cn_reader    import (cn_reader)
@@ -9,10 +10,10 @@ from Alhena2._base_extractor import (_base_extractor)
 ALL_CN = 'all_cn.h5'
 
 class cn_extractor(_base_extractor):
-    def __init__(self, path, symbols=None, start='2007-01-01', end=None, subjects=None, add_group=None, asfreq=None):
+    def __init__(self, path, symbols=None, subjects=None, add_group=None):
 
-        super().__init__(path=path, symbols=symbols, start=start, end=end, \
-                         subjects=subjects, add_group=add_group, asfreq=asfreq)
+        super().__init__(path=path, symbols=symbols, \
+                         subjects=subjects, add_group=add_group)
 
         all_cn = os.path.join(self.path, ALL_CN)
 
@@ -23,22 +24,17 @@ class cn_extractor(_base_extractor):
         self.daily   = pd.read_hdf(all_cn, key='daily',  mode='r')
         self.reports = pd.read_hdf(all_cn, key='report', mode='r')
 
-        if not self.subjects is None:
-            self.reports = self.reports[self.subjects]
-
-        all_symbols = self.info.index
-
-        if self.symbols is None:
-            self.symbols = list(all_symbols)
-        else:
-            for sym in self.symbols:
-                if not sym in list(all_symbols):
-                    raise KeyError('%s is not in all symbols' % sym)
+        self.symbols  = self._symbols()
+        self.subjects = self._subjects()
 
     def gen_data(self):
 
+        # columns first, may involves group mean
+        self.reports = self._formula()
+
         result = self.reports.loc[self.symbols]
 
+        # group mean
         if not self.add_group is None:
 
             mean = self._group_mean(self.add_group).sort_index()
@@ -52,3 +48,65 @@ class cn_extractor(_base_extractor):
             result = pd.concat(objs, keys=keys, names=['symbols', 'date'])
 
         return result.unstack(level=0)
+
+    def _symbols(self):
+
+        info = self.info
+
+        _symbols = []
+        if self.symbols is None:
+            _symbols = list(info.index)
+        else:
+            for s in self.symbols:
+                if s in info.index:
+                    _symbols.append(s)
+                else:
+                    # FIXME: more friendly
+                    _symbols.append(info.index[info['name'] == s].tolist()[0])
+
+        if len(_symbols) == 0:
+            raise ValueError
+
+        return _symbols
+
+    def _subjects(self):
+
+        _subjects = []
+        if self.subjects is None:
+           _subjects = ['PB', 'PE', 'ROE', 'CASH', 'close']
+        else:
+            if isinstance(self.subjects, list):
+                _subjects = self.subjects
+            elif isinstance(self.subjects, str):
+                _subjects = [self.subjects]
+
+        return _subjects
+
+    def _formula(self):
+
+        alias = {'ROE1' : 'ROE / PB',
+                 }
+
+        _reports = self.reports
+
+        def __caculate(reports, left, right):
+
+            right = re.sub(r'([^- %+*\/\(\)\d]+)',
+                           r'reports["\1"]',
+                           right)
+
+            exec('reports["%s"] = %s' % (left, right))
+
+            return reports
+
+        _subjects = []
+        for s in self.subjects:
+            if s in _reports.columns:
+                _subjects.append(s)
+            elif s in alias.keys():
+                _reports = __caculate(_reports, s, alias[s])
+                _subjects.append(s)
+            else:
+                raise NotImplementedError('anonymous formula is not supported')
+
+        return _reports[_subjects]

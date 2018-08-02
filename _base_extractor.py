@@ -6,28 +6,17 @@ from abc import (ABCMeta, abstractmethod)
 from Alhena2._utils import (_sanitize_dates)
 
 class _base_extractor():
-    def __init__(self, path, symbols=None, start='2007-01-01', end=None, subjects=None, add_group=None, asfreq=None):
+    def __init__(self, path, symbols=None, subjects=None, add_group=None):
 
-        self.path    = path
-        self.symbols = symbols
-
-        (start, end) = _sanitize_dates(start, end)
-        self.start = start
-        self.end   = end
-
+        self.path     = path
+        self.symbols  = symbols
         self.subjects = subjects
 
         if not add_group is None:
             if isinstance(add_group, str):
                 self.add_group = add_group
             else:
-                raise TypeError('add_group is str')
-
-        if not asfreq is None: 
-            if isinstance(asfreq, str):
-                self.asfreq = asfreq
-            else:
-                raise TypeError('asfreq is str')
+                raise TypeError('add_group must be str')
 
         # implemented in child
         self.info    = None
