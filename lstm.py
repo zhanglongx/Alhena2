@@ -87,223 +87,241 @@ def __read_fake_data(n_samples, n_steps):
 
     return data, np.array(label), n_input
 
-def standardize(train):
-    """ Standardize data """
+class lstm():
+    def __init__(self, n_steps=4, n_channels=2, n_classes=2, n_batches=100):
 
-    x_mean = np.mean(train, axis=0)
+        self.n_steps    = n_steps
+        self.n_channels = n_channels
+        self.n_classes  = n_classes
+        self.n_batches  = n_batches
 
-    # Standardize train and test
-    X_train = (train - np.mean(train, axis=0)[None,:,:]) / np.std(train, axis=0)[None,:,:]
+        self._build_graph()
 
-    return X_train
+    def train(self, x_in, y_in, epochs=1000):
+        from sklearn.model_selection import train_test_split
 
-def one_hot(labels, n_class = 6):
-    """ One-hot encoding """
-    expansion = np.eye(n_class)
-    y = expansion[:, labels-1].T
-    assert y.shape[1] == n_class, "Wrong number of labels!"
+        # X_t = self._standardize(x_in)
+        X_t = x_in
+        X_tr, X_vld, lab_tr, lab_vld = train_test_split(X_t, y_in, \
+                                                        stratify = y_in, \
+                                                        random_state = 123)
 
-    return y
+        y_tr  = self._one_hot(lab_tr)
+        y_vld = self._one_hot(lab_vld)
 
-def get_batches(X, y, batch_size = 100):
-    """ Return a generator for batches """
-    n_batches = len(X) // batch_size
-    X, y = X[:n_batches*batch_size], y[:n_batches*batch_size]
+        batch_size = self.n_batches
 
-    # Loop over batches and yield
-    for b in range(0, len(X), batch_size):
-        yield X[b:b+batch_size], y[b:b+batch_size]
+        if not os.path.exists('checkpoints'):
+            os.mkdir('checkpoints')
 
-def __lstm(X, Y, chan_len, batch_size=100):
+        validation_acc  = []
+        validation_loss = []
 
-    from sklearn.model_selection import train_test_split
-    #import matplotlib.pyplot as plt
-    #get_ipython().magic('matplotlib inline')
+        train_acc  = []
+        train_loss = []
 
-    ### Prepare data
-    # In[2]:
-    X_train, labels_train, list_ch_train = (X, Y, chan_len)
+        inputs_        = self.inputs_
+        labels_        = self.labels_
+        keep_prob_     = self.keep_prob_
+        learning_rate_ = self.learning_rate_
+        cell           = self.cell
 
-    # In[3]:
-    # Standardize
-    # X_train = standardize(X_train)
+        graph = self.graph
+        cost  = self.cost
+        initial_state = self.initial_state
+        final_state   = self.final_state
+        optimizer     = self.optimizer
+        accuracy      = self.accuracy
 
-    # Train/Validation Split
-    # In[4]:
-    X_tr, X_vld, lab_tr, lab_vld = train_test_split(X_train, labels_train,
-                                                    stratify = labels_train, random_state = 123)
-    # Fixed
-    n_classes  = 2
-    n_channels = chan_len
+        learning_rate = 0.0001        # Learning rate (default is 0.001)
 
-    #### Hyperparameters
-    lstm_size     = 3*chan_len  # 3 times the amount of channels
-    lstm_layers   = 2           # Number of layers
-    seq_len       = 4           # Number of steps # tempz
-    learning_rate = 0.0001      # Learning rate (default is 0.001)
-    epochs        = 1000
+        with graph.as_default():
+            saver = tf.train.Saver()
 
-    # One-hot encoding:
-    # In[5]:
-    y_tr  = one_hot(lab_tr,  n_class=n_classes)
-    y_vld = one_hot(lab_vld, n_class=n_classes)
-
-    # In[6]:
-    # Imports
-
-    # ### Construct the graph
-    # Placeholders
-    # In[8]:
-
-    graph = tf.Graph()
-
-    # Construct placeholders
-    with graph.as_default():
-        inputs_        = tf.placeholder(tf.float32, [None, seq_len, n_channels], name = 'inputs')
-        labels_        = tf.placeholder(tf.float32, [None, n_classes], name = 'labels')
-        keep_prob_     = tf.placeholder(tf.float32, name = 'keep')
-        learning_rate_ = tf.placeholder(tf.float32, name = 'learning_rate')
-
-    # Build Convolutional Layer(s)
-    # 
-    # Questions: 
-    # * Should we use a different activation? Like tf.nn.tanh?
-    # * Should we use pooling? average or max?
-    # In[9]:
-
-    # Convolutional layers
-    with graph.as_default():
-        # (batch, samples, chan_len) --> (batch, samples, chan_len * 2)
-        conv1 = tf.layers.conv1d(inputs=inputs_, filters=chan_len * 2, kernel_size=2, strides=1, 
-                                 padding='same', activation = tf.nn.relu)
-        n_ch = n_channels * 2
-
-    # Now, pass to LSTM cells
-    # In[10]:
-
-    with graph.as_default():
-        # Construct the LSTM inputs and LSTM cells
-        lstm_in = tf.transpose(conv1, [1,0,2])    # reshape into (seq_len, batch, channels)
-        lstm_in = tf.reshape(lstm_in, [-1, n_ch]) # Now (seq_len*N, n_channels)
-        
-        # To cells
-        lstm_in = tf.layers.dense(lstm_in, lstm_size, activation=None) # or tf.nn.relu, tf.nn.sigmoid, tf.nn.tanh?
-        
-        # Open up the tensor into a list of seq_len pieces
-        lstm_in = tf.split(lstm_in, seq_len, 0)
-        
-        # Add LSTM layers
-        lstm = tf.contrib.rnn.BasicLSTMCell(lstm_size)
-        drop = tf.contrib.rnn.DropoutWrapper(lstm, output_keep_prob=keep_prob_)
-        cell = tf.contrib.rnn.MultiRNNCell([drop] * lstm_layers)
-        initial_state = cell.zero_state(batch_size, tf.float32)
-
-
-    # Define forward pass and cost function:
-    # In[11]:
-
-    with graph.as_default():
-        outputs, final_state = tf.contrib.rnn.static_rnn(cell, lstm_in, dtype=tf.float32,
-                                                         initial_state = initial_state)
-        
-        # We only need the last output tensor to pass into a classifier
-        logits = tf.layers.dense(outputs[-1], n_classes, name='logits')
-        
-        # Cost function and optimizer
-        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels_))
-        #optimizer = tf.train.AdamOptimizer(learning_rate_).minimize(cost) # No grad clipping
-        
-        # Grad clipping
-        train_op = tf.train.AdamOptimizer(learning_rate_)
-
-        gradients = train_op.compute_gradients(cost)
-        capped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
-        optimizer = train_op.apply_gradients(capped_gradients)
-        
-        # Accuracy
-        correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(labels_, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
-
-
-    #### Train the network
-    # In[12]:
-
-    if not os.path.exists('checkpoints'):
-        os.mkdir('checkpoints')
-    # In[13]:
-
-    validation_acc  = []
-    validation_loss = []
-
-    train_acc  = []
-    train_loss = []
-
-    with graph.as_default():
-        saver = tf.train.Saver()
-
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.global_variables_initializer())
-        iteration = 1
-        
-        for e in range(epochs):
-            # Initialize 
-            state = sess.run(initial_state)
+        with tf.Session(graph=graph) as sess:
+            sess.run(tf.global_variables_initializer())
+            iteration = 1
             
-            # Loop over batches
-            for x,y in get_batches(X_tr, y_tr, batch_size):
+            for e in range(epochs):
+                # Initialize 
+                state = sess.run(initial_state)
                 
-                # Feed dictionary
-                feed = {inputs_ : x, labels_ : y, keep_prob_ : 0.5, 
-                        initial_state : state, learning_rate_ : learning_rate}
-                
-                loss, _ , state, acc = sess.run([cost, optimizer, final_state, accuracy], 
-                                                 feed_dict = feed)
-                train_acc.append(acc)
-                train_loss.append(loss)
-                
-                # Print at each 5 iters
-                if (iteration % 5 == 0):
-                    print("Epoch: {}/{}".format(e, epochs),
-                          "Iteration: {:d}".format(iteration),
-                          "Train loss: {:6f}".format(loss),
-                          "Train acc: {:.6f}".format(acc))
-                
-                # Compute validation loss at every 25 iterations
-                if (iteration%25 == 0):
+                # Loop over batches
+                for x,y in self._get_batches(X_tr, y_tr):
                     
-                    # Initiate for validation set
-                    val_state = sess.run(cell.zero_state(batch_size, tf.float32))
+                    # Feed dictionary
+                    feed = {inputs_ : x, labels_ : y, keep_prob_ : 0.5, 
+                            initial_state : state, learning_rate_ : learning_rate}
                     
-                    val_acc_ = []
-                    val_loss_ = []
-                    for x_v, y_v in get_batches(X_vld, y_vld, batch_size):
-                        # Feed
-                        feed = {inputs_ : x_v, labels_ : y_v, keep_prob_ : 1.0, initial_state : val_state}
+                    loss, _ , state, acc = sess.run([cost, optimizer, final_state, accuracy], 
+                                                     feed_dict = feed)
+                    train_acc.append(acc)
+                    train_loss.append(loss)
+                    
+                    # Print at each 5 iters
+                    if (iteration % 5 == 0):
+                        print("Epoch: {}/{}".format(e, epochs),
+                              "Iteration: {:d}".format(iteration),
+                              "Train loss: {:6f}".format(loss),
+                              "Train acc: {:.6f}".format(acc))
+                    
+                    # Compute validation loss at every 25 iterations
+                    if (iteration%25 == 0):
                         
-                        # Loss
-                        loss_v, state_v, acc_v = sess.run([cost, final_state, accuracy], feed_dict = feed)
+                        # Initiate for validation set
+                        val_state = sess.run(cell.zero_state(batch_size, tf.float32))
                         
-                        val_acc_.append(acc_v)
-                        val_loss_.append(loss_v)
+                        val_acc_ = []
+                        val_loss_ = []
+                        for x_v, y_v in self._get_batches(X_vld, y_vld):
+                            # Feed
+                            feed = {inputs_ : x_v, labels_ : y_v, keep_prob_ : 1.0, initial_state : val_state}
+                            
+                            # Loss
+                            loss_v, state_v, acc_v = sess.run([cost, final_state, accuracy], feed_dict = feed)
+                            
+                            val_acc_.append(acc_v)
+                            val_loss_.append(loss_v)
+                        
+                        # Print info
+                        print("Epoch: {}/{}".format(e, epochs),
+                              "Iteration: {:d}".format(iteration),
+                              "Validation loss: {:6f}".format(np.mean(val_loss_)),
+                              "Validation acc: {:.6f}".format(np.mean(val_acc_)))
+                        
+                        # Store
+                        validation_acc.append(np.mean(val_acc_))
+                        validation_loss.append(np.mean(val_loss_))
                     
-                    # Print info
-                    print("Epoch: {}/{}".format(e, epochs),
-                          "Iteration: {:d}".format(iteration),
-                          "Validation loss: {:6f}".format(np.mean(val_loss_)),
-                          "Validation acc: {:.6f}".format(np.mean(val_acc_)))
-                    
-                    # Store
-                    validation_acc.append(np.mean(val_acc_))
-                    validation_loss.append(np.mean(val_loss_))
-                
-                # Iterate 
-                iteration += 1
+                    # Iterate 
+                    iteration += 1
+            
+            saver.save(sess,"checkpoints/lstm.ckpt")
+
+    @staticmethod
+    def _standardize(train):
+        """ Standardize data """
+
+        x_mean = np.mean(train, axis=0)
+
+        # Standardize train and test
+        X_train = (train - np.mean(train, axis=0)[None,:,:]) / np.std(train, axis=0)[None,:,:]
+
+        return X_train
+
+    def _one_hot(self, labels):
+        """ One-hot encoding """
+        expansion = np.eye(self.n_classes)
+        y = expansion[:, labels-1].T
+        assert y.shape[1] == self.n_classes, "Wrong number of labels!"
+
+        return y
+
+    def _get_batches(self, x, y):
+        """ Return a generator for batches """
+        n = len(x) // self.n_batches
+        x, y = x[:n*self.n_batches], y[:n*self.n_batches]
+
+        # Loop over batches and yield
+        for b in range(0, len(x), self.n_batches):
+            yield x[b:b+self.n_batches], y[b:b+self.n_batches]
+
+    def _build_graph(self):
+
+        n_steps    = self.n_steps
+        n_channels = self.n_channels
+        n_classes  = self.n_classes
+        n_batches  = self.n_batches
+
+        #### Hyperparameters
+        lstm_size     = 3*n_channels  # 3 times the amount of channels
+        lstm_layers   = 2             # Number of layers
+        seq_len       = n_steps       # Number of steps # tempz
+
+        graph = tf.Graph()
+
+        # Construct placeholders
+        with graph.as_default():
+            inputs_        = tf.placeholder(tf.float32, [None, seq_len, n_channels], name = 'inputs')
+            labels_        = tf.placeholder(tf.float32, [None, n_classes], name = 'labels')
+            keep_prob_     = tf.placeholder(tf.float32, name = 'keep')
+            learning_rate_ = tf.placeholder(tf.float32, name = 'learning_rate')
+
+        # Build Convolutional Layer(s)
+        # 
+        # Questions: 
+        # * Should we use a different activation? Like tf.nn.tanh?
+        # * Should we use pooling? average or max?
+        # In[9]:
+
+        # Convolutional layers
+        with graph.as_default():
+            # (batch, samples, n_channels) --> (batch, samples, n_channels * 2)
+            conv1 = tf.layers.conv1d(inputs=inputs_, filters=n_channels * 2, kernel_size=2, strides=1, 
+                                     padding='same', activation = tf.nn.relu)
+            n_ch = n_channels * 2
+
+        # Now, pass to LSTM cells
+        # In[10]:
+
+        with graph.as_default():
+            # Construct the LSTM inputs and LSTM cells
+            lstm_in = tf.transpose(conv1, [1,0,2])    # reshape into (seq_len, batch, channels)
+            lstm_in = tf.reshape(lstm_in, [-1, n_ch]) # Now (seq_len*N, n_channels)
+            
+            # To cells
+            lstm_in = tf.layers.dense(lstm_in, lstm_size, activation=None) # or tf.nn.relu, tf.nn.sigmoid, tf.nn.tanh?
+            
+            # Open up the tensor into a list of seq_len pieces
+            lstm_in = tf.split(lstm_in, seq_len, 0)
+            
+            # Add LSTM layers
+            lstm = tf.contrib.rnn.BasicLSTMCell(lstm_size)
+            drop = tf.contrib.rnn.DropoutWrapper(lstm, output_keep_prob=keep_prob_)
+            cell = tf.contrib.rnn.MultiRNNCell([drop] * lstm_layers)
+            initial_state = cell.zero_state(n_batches, tf.float32)
         
-        saver.save(sess,"checkpoints/lstm.ckpt")
+        # Define forward pass and cost function:
+        # In[11]:
+
+        with graph.as_default():
+            outputs, final_state = tf.contrib.rnn.static_rnn(cell, lstm_in, dtype=tf.float32,
+                                                             initial_state = initial_state)
+            
+            # We only need the last output tensor to pass into a classifier
+            logits = tf.layers.dense(outputs[-1], n_classes, name='logits')
+            
+            # Cost function and optimizer
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels_))
+            #optimizer = tf.train.AdamOptimizer(learning_rate_).minimize(cost) # No grad clipping
+            
+            # Grad clipping
+            train_op = tf.train.AdamOptimizer(learning_rate_)
+
+            gradients = train_op.compute_gradients(cost)
+            capped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
+            optimizer = train_op.apply_gradients(capped_gradients)
+            
+            # Accuracy
+            correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(labels_, 1))
+            accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
+
+        self.inputs_        = inputs_
+        self.labels_        = labels_
+        self.keep_prob_     = keep_prob_
+        self.learning_rate_ = learning_rate_
+        self.cell           = cell
+
+        self.graph = graph
+        self.cost  = cost
+        self.initial_state = initial_state
+        self.final_state   = final_state
+        self.optimizer     = optimizer
+        self.accuracy      = accuracy
 
 def __lstm_test(X, Y, batch_size=100):
 
-    y_vld = one_hot(Y, n_class=2)
+    y_vld = self._one_hot(Y)
 
     # TODO:
     graph = tf.Graph()
@@ -316,7 +334,7 @@ def __lstm_test(X, Y, batch_size=100):
         # Restore
         saver.restore(sess, tf.train.latest_checkpoint('checkpoints'))
         
-        for x_t, y_t in get_batches(X, y_vld, batch_size):
+        for x_t, y_t in self._get_batches(X, y_vld, batch_size):
             feed = {inputs_: x_t,
                     labels_: y_t,
                     keep_prob_: 1}
@@ -331,7 +349,8 @@ def main(mode='train'):
         (x, y, len) = __read_fake_data(n_samples=10000, n_steps=4)
         # (x, y, len) = __read_data(mode='train', debug=True)
 
-        __lstm(X=x, Y=y, chan_len=len, batch_size=100)
+        l = lstm(n_steps=4, n_channels=2, n_classes=2, n_batches=100)
+        l.train(x_in=x, y_in=y, epochs=100)
 
     elif mode == 'test':
         (x, y, len) = __read_fake_data(n_samples=1000, n_steps=4)
