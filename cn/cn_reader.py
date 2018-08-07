@@ -109,7 +109,7 @@ class cn_reader(_base_reader):
 
         if not symbols is None:
             symbols = [str(s) for s in symbols if s in all_symbols]
-            assert len(symbols) # prevent ill-input, but can be removed
+            assert symbols # prevent ill-input, but can be removed
 
             return symbols
 

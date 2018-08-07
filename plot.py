@@ -1,8 +1,6 @@
 # coding
 
-import os
 import argparse
-import pandas as pd
 import matplotlib.pyplot as plt
 
 import Alhena2.cn.cn_extractor as ex
@@ -13,7 +11,7 @@ def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-
     
     data = data.loc[start:].asfreq(asfreq)
 
-    if save_csv == True:
+    if save_csv is True:
         data.to_csv('t.csv', encoding='gb2312') 
         return
 

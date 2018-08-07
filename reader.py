@@ -3,7 +3,7 @@
 import os, sys, argparse
 from abc import (ABCMeta, abstractmethod)
 
-import Alhena2.cn.cn_reader as cn_reader
+import Alhena2.cn.cn_reader as cn
 
 class _base():
 
@@ -73,7 +73,7 @@ class cn(_base):
         elif os.path.exists(self.file):
             os.remove(self.file)
 
-        r = cn_reader.cn_reader(self.path)
+        r = cn.cn_reader(self.path)
 
         info = r.info()
 

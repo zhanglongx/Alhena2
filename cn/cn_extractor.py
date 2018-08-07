@@ -4,7 +4,6 @@ import os
 import re
 import pandas as pd
 
-from Alhena2.cn.cn_reader    import (cn_reader)
 from Alhena2._base_extractor import (_base_extractor)
 
 ALL_CN = 'all_cn.h5'
@@ -64,7 +63,7 @@ class cn_extractor(_base_extractor):
                     # FIXME: more friendly
                     _symbols.append(info.index[info['name'] == s].tolist()[0])
 
-        if len(_symbols) == 0:
+        if not _symbols:
             raise ValueError
 
         return _symbols
@@ -73,7 +72,7 @@ class cn_extractor(_base_extractor):
 
         _subjects = []
         if self.subjects is None:
-           _subjects = ['PB', 'PE', 'ROE', 'CASH', 'close']
+            _subjects = ['PB', 'PE', 'ROE', 'CASH', 'close']
         else:
             if isinstance(self.subjects, list):
                 _subjects = self.subjects
