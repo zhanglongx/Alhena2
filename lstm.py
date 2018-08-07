@@ -109,7 +109,7 @@ class lstm():
         y_tr  = self._one_hot(lab_tr)
         y_vld = self._one_hot(lab_vld)
 
-        batch_size = self.n_batches
+        n_batches = self.n_batches
 
         if not os.path.exists('checkpoints'):
             os.mkdir('checkpoints')
@@ -126,12 +126,12 @@ class lstm():
         learning_rate_ = self.learning_rate_
         cell           = self.cell
 
-        graph = self.graph
-        cost  = self.cost
-        initial_state = self.initial_state
-        final_state   = self.final_state
-        optimizer     = self.optimizer
-        accuracy      = self.accuracy
+        graph          = self.graph
+        cost           = self.cost
+        initial_state  = self.initial_state
+        final_state    = self.final_state
+        optimizer      = self.optimizer
+        accuracy       = self.accuracy
 
         learning_rate = 0.0001        # Learning rate (default is 0.001)
 
@@ -169,7 +169,7 @@ class lstm():
                     if iteration % 25 == 0:
 
                         # Initiate for validation set
-                        val_state = sess.run(cell.zero_state(batch_size, tf.float32))
+                        val_state = sess.run(cell.zero_state(n_batches, tf.float32))
 
                         val_acc_ = []
                         val_loss_ = []
@@ -206,12 +206,11 @@ class lstm():
         labels_    = self.labels_
         keep_prob_ = self.keep_prob_
 
-        graph = self.graph
+        graph      = self.graph
+        accuracy   = self.accuracy
 
         with graph.as_default():
             saver = tf.train.Saver()
-
-        accuracy = self.accuracy
 
         test_acc = []
 
@@ -334,19 +333,22 @@ class lstm():
             correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(labels_, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
 
+            # Output
+            output = tf.argmax(logits, 1)
+
         self.inputs_        = inputs_
         self.labels_        = labels_
         self.keep_prob_     = keep_prob_
         self.learning_rate_ = learning_rate_
         self.cell           = cell
-        self.logits         = logits
+        self.output         = output
 
-        self.graph = graph
-        self.cost  = cost
-        self.initial_state = initial_state
-        self.final_state   = final_state
-        self.optimizer     = optimizer
-        self.accuracy      = accuracy
+        self.graph          = graph
+        self.cost           = cost
+        self.initial_state  = initial_state
+        self.final_state    = final_state
+        self.optimizer      = optimizer
+        self.accuracy       = accuracy
 
 def main(mode='train'):
 
