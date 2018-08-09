@@ -12,11 +12,10 @@ class _base_extractor():
         self.symbols  = symbols
         self.subjects = subjects
 
-        if not add_group is None:
-            if isinstance(add_group, str):
-                self.add_group = add_group
-            else:
-                raise TypeError('add_group must be str')
+        if not (isinstance(add_group, str) or add_group is None):
+            raise TypeError('add_group must be str or None')
+
+        self.add_group = add_group
 
         # implemented in child
         self.info    = None
