@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 import Alhena2.cn.cn_extractor as ex
 
-def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-DEC'):
+def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-MAR'):
 
     data = ex.cn_extractor('.', symbols=symbols, subjects=formula, add_group='industry').gen_data()
     
@@ -15,6 +15,7 @@ def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-
         data.to_csv('t.csv', encoding='gb2312') 
         return
 
+    # save_csv is False
     plt.figure()
 
     for s in formula:
@@ -24,12 +25,20 @@ def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='''wrapper for Alhena2 extractor
-                                                 ''')
-    parser.add_argument('-c', '--csv', default=True, type=bool, help='csv output')
+    parser = argparse.ArgumentParser(description='''wrapper for Alhena2 extractor''')
+
+    parser.add_argument('-c', '--csv', dest='csv', action='store_true', help='csv output')
     parser.add_argument('-f', '--formula', type=str, nargs='?', help='formula or file input (.json)')
     parser.add_argument('-p', '--path', default='.', type=str, nargs='?', help='Alhena2 path')
     parser.add_argument('-s', '--start', default='2013-01-01', type=str, help='start date')
     parser.add_argument('symbols', type=str, nargs='+', help='symbols to extract')
 
-    plot('.', formula=['PB', 'ROE1'], symbols=['000651'], start='2014-01-01')
+    args = parser.parse_args()
+
+    csv     = args.csv
+    formula = args.formula
+    path    = args.path
+    start   = args.start
+    symbols = args.symbols
+
+    plot(path=path, save_csv=csv, formula=formula, symbols=symbols, start=start)
