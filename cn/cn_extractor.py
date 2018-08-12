@@ -84,7 +84,8 @@ class cn_extractor(_base_extractor):
     def _formula(self):
 
         alias = {'ROE1' : 'ROE / PB',
-                 }
+                 '格老指数' : 'close * 股本 / (流动资产合计 - 负债合计 - 存货)',
+                 '股本数值' : 'close * 股本'}
 
         _reports = self.reports
 
