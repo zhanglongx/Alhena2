@@ -75,9 +75,9 @@ def __read_fake_data(n_samples, n_steps):
                 d = [rd.random() * 4.0 - 3.0 for i in range(n_steps)]
             else:
                 if i == 0:
-                    d = [rd.random() * 1.5 - 0.25 for i in range(n_steps)]
+                    d = [rd.random() * 4.0 - 1.0 for i in range(n_steps)]
                 elif i == 1:
-                    d = [rd.random() * 1.5 - 0.25 for i in range(n_steps)]
+                    d = [rd.random() * 4.0 - 1.0 for i in range(n_steps)]
                 else:
                     pass
 
@@ -313,7 +313,7 @@ class lstm():
 
         with graph.as_default():
             outputs, final_state = tf.contrib.rnn.static_rnn(cell, lstm_in, dtype=tf.float32,
-                                                             initial_state = initial_state)
+                                                             initial_state=initial_state)
 
             # We only need the last output tensor to pass into a classifier
             logits = tf.layers.dense(outputs[-1], n_classes, name='logits')
@@ -358,7 +358,7 @@ def main(mode='train'):
         (x, y, _) = __read_fake_data(n_samples=10000, n_steps=4)
         # (x, y, len) = __read_data(mode='train', debug=True)
 
-        l.train(x_in=x, y_in=y, epochs=100)
+        l.train(x_in=x, y_in=y, epochs=1000)
 
     elif mode == 'test':
         (x, y, _) = __read_fake_data(n_samples=1000, n_steps=4)
