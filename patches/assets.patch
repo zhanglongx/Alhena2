@@ -1,0 +1,95 @@
+diff --git a/_base_extractor.py b/_base_extractor.py
+index 57daceb..e5c87fb 100644
+--- a/_base_extractor.py
++++ b/_base_extractor.py
+@@ -36,4 +36,8 @@ class _base_extractor():
+ 
+     @abstractmethod
+     def gen_data(self):
++        raise NotImplementedError
++
++    @abstractmethod
++    def assets(self):
+         raise NotImplementedError
+\ No newline at end of file
+diff --git a/cn/cn_extractor.py b/cn/cn_extractor.py
+index fa48a2b..322f469 100644
+--- a/cn/cn_extractor.py
++++ b/cn/cn_extractor.py
+@@ -48,6 +48,34 @@ class cn_extractor(_base_extractor):
+ 
+         return result.unstack(level=0)
+ 
++    def assets(self):
++        
++        reports = self.reports.loc[(self.symbols, slice(None)), '股本']
++        daily   = self.daily.loc[(self.symbols, slice(None)), 'close']
++        ex      = self.daily.loc[(self.symbols, slice(None)), ['gift', 'donation']]
++
++        result = []
++        for sym in self.symbols:
++            r = reports.loc[sym].dropna()
++            d = daily.loc[sym]
++            e = ex.loc[sym].dropna()
++
++            last = r.iloc[-1]
++
++            def __inv_ex(s, g, d):
++                return s * (1 + g/10 + d/10)
++
++            for xdr_date in e.index.values:
++                if xdr_date > r.index.values[-1] and \
++                   xdr_date < d.index.values[-1]:
++
++                   last = __inv_ex(last, e.loc[xdr_date, 'gift'], \
++                                   e.loc[xdr_date, 'donation'])
++
++            result.append(last * d.iloc[-1])
++
++        return pd.Series(result, index=self.symbols)
++            
+     def _symbols(self):
+ 
+         info = self.info
+diff --git a/cn/cn_reader.py b/cn/cn_reader.py
+index f0dd561..1ae08bb 100644
+--- a/cn/cn_reader.py
++++ b/cn/cn_reader.py
+@@ -236,7 +236,7 @@ class cn_reader(_base_reader):
+     def _read_one_daily(self, symbol, subjects=None, ex=None, freq='D'):
+ 
+         if subjects is None:
+-            subjects = ['close']
++            subjects = ['close', 'gift', 'donation', 'bouns']
+ 
+         file = os.path.join(self.path['daily'], symbol + '.csv')
+ 
+diff --git a/plot.py b/plot.py
+index 85535ec..29f9c47 100644
+--- a/plot.py
++++ b/plot.py
+@@ -7,9 +7,12 @@ import Alhena2.cn.cn_extractor as ex
+ 
+ def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-MAR'):
+ 
+-    data = ex.cn_extractor('.', symbols=symbols, subjects=formula, add_group='industry').gen_data()
++    data = ex.cn_extractor('.', symbols=symbols, subjects=formula, add_group=None).gen_data()
+     
+-    data = data.loc[start:].asfreq(asfreq)
++    data = data.loc[start:]
++
++    data = data.stack(1)
++    data.ffill(axis=1, inplace=True)
+ 
+     if save_csv is True:
+         data.to_csv('t.csv', encoding='gb2312') 
+@@ -41,4 +44,8 @@ if __name__ == '__main__':
+     start   = args.start
+     symbols = args.symbols
+ 
++    assets = ex.cn_extractor('.', symbols=None).assets()
++
++    assets.to_csv('t.csv')
++
+     plot(path=path, save_csv=csv, formula=formula, symbols=symbols, start=start)
+\ No newline at end of file
