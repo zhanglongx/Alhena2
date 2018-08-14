@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--formula', type=str, nargs='?', help='formula or file input (.json)')
     parser.add_argument('-p', '--path', default='.', type=str, nargs='?', help='Alhena2 path')
     parser.add_argument('-s', '--start', default='2013-01-01', type=str, help='start date')
-    parser.add_argument('symbols', type=str, nargs='+', help='symbols to extract')
+    parser.add_argument('symbols', default=None, type=str, nargs='*', help='symbols to extract')
 
     args = parser.parse_args()
 

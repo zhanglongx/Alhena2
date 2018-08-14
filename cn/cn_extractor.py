@@ -2,6 +2,7 @@
 
 import os
 import re
+import json
 import pandas as pd
 
 from Alhena2._base_extractor import (_base_extractor)
@@ -53,7 +54,7 @@ class cn_extractor(_base_extractor):
         info = self.info
 
         _symbols = []
-        if self.symbols is None:
+        if (self.symbols is None) or (not self.symbols):
             _symbols = list(info.index)
         else:
             for s in self.symbols:
@@ -71,20 +72,25 @@ class cn_extractor(_base_extractor):
     def _subjects(self):
 
         _subjects = []
-        if self.subjects is None:
+        if (self.subjects is None) or (not self.subjects):
             _subjects = ['PB', 'PE', 'ROE', 'CASH', 'close']
-        else:
-            if isinstance(self.subjects, list):
-                _subjects = self.subjects
-            elif isinstance(self.subjects, str):
+
+        elif isinstance(self.subjects, str):
+            if os.path.exists(self.subjects):
+                with open(self.subjects) as f:
+                    _subjects = json.load(f)
+            else:
+                # make list
                 _subjects = [self.subjects]
+
+        else:
+            _subjects = self.subjects
 
         return _subjects
 
     def _formula(self):
 
-        alias = {'ROE1' : 'ROE / PB',
-                 '格老指数' : 'close * 股本 / (流动资产合计 - 负债合计 - 存货)',
+        alias = {'格老指数' : 'close * 股本 / (流动资产合计 - 负债合计 - 存货)',
                  '股本数值' : 'close * 股本'}
 
         _reports = self.reports
@@ -99,14 +105,25 @@ class cn_extractor(_base_extractor):
 
             return reports
 
+        if isinstance(self.subjects, list):
+            _inputs = self.subjects
+        elif isinstance(self.subjects, dict):
+            _inputs = self.subjects.keys()
+        else:
+            raise TypeError('subjects type error')
+
         _subjects = []
-        for s in self.subjects:
+        for s in _inputs:
             if s in _reports.columns:
-                _subjects.append(s)
+                # instance get
+                pass
             elif s in alias.keys():
                 _reports = __caculate(_reports, s, alias[s])
-                _subjects.append(s)
+            elif isinstance(self.subjects, dict):
+                _reports = __caculate(_reports, s, self.subjects[s])
             else:
-                raise NotImplementedError('anonymous formula is not supported')
+                raise KeyError('%s is not in any map' % s)
+
+            _subjects.append(s)
 
         return _reports[_subjects]
