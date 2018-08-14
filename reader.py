@@ -64,6 +64,8 @@ class cn(_base):
         if not super().update() is True:
             return False
 
+        cn_reader('.').update()
+
         return True
 
     def build(self):
