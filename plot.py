@@ -3,11 +3,11 @@
 import argparse
 import matplotlib.pyplot as plt
 
-import Alhena2.cn.cn_extractor as ex
+from Alhena2.cn.cn_extractor import (cn_extractor)
 
 def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-MAR'):
 
-    data = ex.cn_extractor('.', symbols=symbols, subjects=formula, add_group='industry').gen_data()
+    data = cn_extractor('.', symbols=symbols, subjects=formula, add_group='industry').gen_data()
     
     data = data.loc[start:].asfreq(asfreq)
 
