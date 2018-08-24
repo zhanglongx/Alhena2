@@ -319,7 +319,7 @@ class lstm():
             logits = tf.layers.dense(outputs[-1], n_classes, name='logits')
 
             # Cost function and optimizer
-            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels_))
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=labels_))
             #optimizer = tf.train.AdamOptimizer(learning_rate_).minimize(cost) # No grad clipping
 
             # Grad clipping
@@ -367,4 +367,4 @@ def main(mode='train'):
         l.predict(x_in=x, y_in=y)
 
 if __name__ == '__main__':
-    main(mode='test')
+    main(mode='train')
