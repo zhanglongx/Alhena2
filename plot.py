@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from Alhena2.cn.cn_extractor import (cn_extractor)
 
-def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-MAR'):
+def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-DEC'):
 
     data = cn_extractor('.', symbols=symbols, subjects=formula, add_group='industry').gen_data()
     
@@ -18,7 +18,7 @@ def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-
     # save_csv is False
     plt.figure()
 
-    for s in formula:
+    for s in set(data.columns.get_level_values(0)):
         data[s].plot.bar(title=s)
 
     plt.show()
