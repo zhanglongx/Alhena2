@@ -12,6 +12,7 @@ Debug/
 *.h5
 database.tar.xz
 
+checkpoints/
 database/
 test/
 
