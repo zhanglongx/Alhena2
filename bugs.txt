@@ -1,1 +1,2 @@
 1. 000402 needs special editing
+2. cn/daily.csv can't be null (only version info)
