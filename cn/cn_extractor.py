@@ -10,7 +10,7 @@ from Alhena2._base_extractor import (_base_extractor)
 ALL_CN = 'all_cn.h5'
 
 class cn_extractor(_base_extractor):
-    def __init__(self, path, symbols=None, subjects=None, add_group=None):
+    def __init__(self, path, symbols=None, subjects=None, add_group=None, as_freq='A-DEC'):
 
         super().__init__(path=path, symbols=symbols, \
                          subjects=subjects, add_group=add_group)
@@ -28,6 +28,10 @@ class cn_extractor(_base_extractor):
         self.subjects = self._subjects()
 
     def gen_data(self):
+
+        if self.as_freq:
+            self.reports = self.reports.unstack(level=0).asfreq(self.as_freq).\
+                                stack(level=-1).swaplevel(i=0)
 
         # columns first, may involves group mean
         self.reports = self._formula()
@@ -119,6 +123,9 @@ class cn_extractor(_base_extractor):
                 pass
             elif s in alias.keys():
                 _reports = __caculate(_reports, s, alias[s])
+            # order is important for 'PEG'
+            elif s == 'PEG':
+                _reports['PEG'] = _reports['PE'] / (_reports['五、净利润'].groupby(level='symbols').apply(lambda x: x.pct_change()) * 100)
             elif isinstance(self.subjects, dict):
                 _reports = __caculate(_reports, s, self.subjects[s])
             else:

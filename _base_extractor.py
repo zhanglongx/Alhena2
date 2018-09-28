@@ -6,7 +6,7 @@ from abc import (ABCMeta, abstractmethod)
 from Alhena2._utils import (_sanitize_dates)
 
 class _base_extractor():
-    def __init__(self, path, symbols=None, subjects=None, add_group=None):
+    def __init__(self, path, symbols=None, subjects=None, add_group=None, as_freq='A-DEC'):
 
         self.path     = path
         self.symbols  = symbols
@@ -16,6 +16,11 @@ class _base_extractor():
             raise TypeError('add_group must be str or None')
 
         self.add_group = add_group
+
+        if not (isinstance(as_freq, str) or as_freq is None):
+            raise TypeError('as_freq must be str or None')
+
+        self.as_freq = as_freq
 
         # implemented in child
         self.info    = None

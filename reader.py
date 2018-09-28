@@ -104,7 +104,6 @@ if __name__ == '__main__':
     command = parser.parse_args().command
 
     if sub == 'cn':
-
         for c in command:
             if c == 'update':
                 cn(path, file).update()
@@ -112,6 +111,5 @@ if __name__ == '__main__':
                 cn(path, file).build()
             else:
                 raise ValueError('%s not supported' % c)
-
     else:
         raise ValueError('sub %s has not been implemented' % sub)
