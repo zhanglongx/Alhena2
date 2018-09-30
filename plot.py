@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 
 from Alhena2.cn.cn_extractor import (cn_extractor)
 
-def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-DEC'):
+def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-JUN'):
 
-    data = cn_extractor('.', symbols=symbols, subjects=formula, add_group=None).gen_data()
+    data = cn_extractor('.', symbols=symbols, subjects=formula, add_group=None, as_freq=asfreq).gen_data()
     
-    data = data.loc[start:].asfreq(asfreq)
+    data = data.loc[start:]
 
     if save_csv is True:
         data.to_csv('t.csv', encoding='gb2312') 

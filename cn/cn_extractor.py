@@ -13,7 +13,7 @@ class cn_extractor(_base_extractor):
     def __init__(self, path, symbols=None, subjects=None, add_group=None, as_freq='A-DEC'):
 
         super().__init__(path=path, symbols=symbols, \
-                         subjects=subjects, add_group=add_group)
+                         subjects=subjects, add_group=add_group, as_freq=as_freq)
 
         all_cn = os.path.join(self.path, ALL_CN)
 
