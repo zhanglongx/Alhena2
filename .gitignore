@@ -11,6 +11,7 @@ Debug/
 
 *.h5
 database.tar.xz
+t.csv
 
 checkpoints/
 database/
