@@ -95,7 +95,8 @@ class cn_extractor(_base_extractor):
     def _formula(self):
 
         alias = {'格老指数' : 'close * 股本 / (流动资产合计 - 负债合计 - 存货)',
-                 '股本数值' : 'close * 股本'}
+                 '股本数值' : 'close * 股本',
+                 '毛利率'   : '(一、营业总收入 - 二、营业总成本) / 一、营业总收入' }
 
         _reports = self.reports
 
