@@ -272,6 +272,9 @@ class cn_reader(_base_reader):
         df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
                                names=columns, parse_dates=True, encoding=self.encoding)
 
+        # fill time-date gap in original .csv
+        df_daily = df_daily.asfreq('d', method='ffill')
+
         columns = ['gift', 'donation', 'bouns']
         df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
                             names=columns, parse_dates=True, encoding=self.encoding)
