@@ -3,6 +3,7 @@
 import os
 import re
 import json
+import numpy as np
 import pandas as pd
 
 from Alhena2._base_extractor import (_base_extractor)
@@ -18,7 +19,7 @@ class cn_extractor(_base_extractor):
         all_cn = os.path.join(self.path, ALL_CN)
 
         if not os.path.exists(all_cn):
-            raise OSError('%s not exists, run `make build` first' % all_cn)
+            raise OSError('%s not exists, run `make h5` first' % all_cn)
 
         self.info    = pd.read_hdf(all_cn, key='info',   mode='r')
         self.daily   = pd.read_hdf(all_cn, key='daily',  mode='r')
@@ -36,10 +37,17 @@ class cn_extractor(_base_extractor):
         # columns first, may involves group mean
         self.reports = self._formula()
 
+        # TODO: intend for _group_mean(), inf will effect the whole mean
+        #       move to add_group? or provide as a option?
+        self.reports.replace([np.inf, -np.inf], np.nan, inplace=True)
+
         result = self.reports.loc[self.symbols]
 
         # group mean
         if not self.add_group is None:
+
+            if self.add_group == 'exchange':
+                self._supplement_info()
 
             mean = self._group_mean(self.add_group).sort_index()
 
@@ -72,6 +80,20 @@ class cn_extractor(_base_extractor):
             raise ValueError
 
         return _symbols
+
+    def _supplement_info(self):
+
+        info = self.info
+
+        for sym in list(info.index):
+            if int(sym) < 300000:
+                info.loc[sym, 'exchange'] = '深A'
+            elif int(sym) < 600000:
+                info.loc[sym, 'exchange'] = '创业板'
+            else:
+                info.loc[sym, 'exchange'] = '沪A'
+
+        self.info = info
 
     def _subjects(self):
 

@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 from Alhena2.cn.cn_extractor import (cn_extractor)
 
-def plot(path, save_csv=True, formula=None, symbols=None, start=None, asfreq='A-JUN'):
+def plot(path, save_csv=True, formula=None, symbols=None, start=None, add_group=None, asfreq='A-JUN'):
 
-    data = cn_extractor('.', symbols=symbols, subjects=formula, add_group=None, as_freq=asfreq).gen_data()
+    data = cn_extractor('.', symbols=symbols, subjects=formula, add_group=add_group, as_freq=asfreq).gen_data()
     
     data = data.loc[start:]
 
@@ -29,6 +29,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-c', '--csv', dest='csv', action='store_true', help='csv output')
     parser.add_argument('-f', '--formula', type=str, nargs='?', help='formula or file input (.json)')
+    parser.add_argument('-g', '--group', default=None, type=str, nargs='?', help='group')
     parser.add_argument('-p', '--path', default='.', type=str, nargs='?', help='Alhena2 path')
     parser.add_argument('-s', '--start', default='2013-01-01', type=str, help='start date')
     parser.add_argument('symbols', default=None, type=str, nargs='*', help='symbols to extract')
@@ -37,8 +38,9 @@ if __name__ == '__main__':
 
     csv     = args.csv
     formula = args.formula
+    group   = args.group
     path    = args.path
     start   = args.start
     symbols = args.symbols
 
-    plot(path=path, save_csv=csv, formula=formula, symbols=symbols, start=start)
+    plot(path=path, save_csv=csv, formula=formula, symbols=symbols, start=start, add_group=group)
