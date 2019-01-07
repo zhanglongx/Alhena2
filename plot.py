@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from Alhena2.cn.cn_extractor import (cn_extractor)
 
-def plot(path, save_csv=True, formula=None, symbols=None, start=None, add_group=None, asfreq='A-JUN'):
+def plot(path, save_csv=True, formula=None, symbols=None, start=None, add_group=None, asfreq=None):
 
     data = cn_extractor('.', symbols=symbols, subjects=formula, add_group=add_group, as_freq=asfreq).gen_data()
     

@@ -149,6 +149,21 @@ class cn_extractor(_base_extractor):
             # order is important for 'PEG'
             elif s == 'PEG':
                 _reports['PEG'] = _reports['PE'] / (_reports['五、净利润'].groupby(level='symbols').apply(lambda x: x.pct_change()) * 100)
+            elif s == 'TTM':
+                if not self.as_freq is None:
+                    raise KeyError('TTM should be used with as_freq = None')
+
+                _reports['_s1'] = _reports['五、净利润'] - _reports['五、净利润'].shift(1)
+
+                idx = _reports.unstack(0).asfreq('A-MAR').index
+                _reports.loc[(slice(None), idx), '_s1'] = _reports.loc[(slice(None), idx), '五、净利润'] 
+                _reports['_TTM'] = _reports['_s1'] \
+                                 + _reports['_s1'].shift(1) \
+                                 + _reports['_s1'].shift(2) \
+                                 + _reports['_s1'].shift(3)
+
+                _reports['TTM'] = (_reports['close'] * _reports['股本']) / _reports['_TTM']
+
             elif isinstance(self.subjects, dict):
                 _reports = __caculate(_reports, s, self.subjects[s])
             else:
