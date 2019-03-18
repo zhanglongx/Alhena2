@@ -4,8 +4,8 @@ import os
 
 from abc import (ABCMeta, abstractmethod)
 
-from Alhena2._network import (_get_one_url)
-from Alhena2._utils   import (_sanitize_dates)
+from _network import (_get_one_url)
+from _utils   import (_sanitize_dates)
 
 class _base_reader():
     """

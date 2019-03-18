@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import tushare as ts
 
-from Alhena2._base_reader import (_base_reader)
+from _base_reader import (_base_reader)
 
 URL_TEMPLATE = 'http://money.finance.sina.com.cn/corp/go.php/vDOWN_%s/displaytype/4/stockid/%s/ctrl/all.phtml'
 

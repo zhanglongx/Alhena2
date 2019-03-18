@@ -3,7 +3,7 @@
 import os, sys, argparse
 from abc import (ABCMeta, abstractmethod)
 
-from Alhena2.cn.cn_reader import (cn_reader)
+from cn.cn_reader import (cn_reader)
 
 class _base():
 

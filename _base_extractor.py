@@ -3,7 +3,7 @@
 import os
 from abc import (ABCMeta, abstractmethod)
 
-from Alhena2._utils import (_sanitize_dates)
+from _utils import (_sanitize_dates)
 
 class _base_extractor():
     def __init__(self, path, symbols=None, subjects=None, add_group=None, as_freq='A-DEC'):

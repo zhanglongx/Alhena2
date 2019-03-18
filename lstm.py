@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from Alhena2.cn.cn_reader import (cn_reader)
+from cn.cn_reader import (cn_reader)
 
 def __read_data(mode='train', debug=False):
 

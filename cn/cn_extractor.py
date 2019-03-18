@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from Alhena2._base_extractor import (_base_extractor)
+from _base_extractor import (_base_extractor)
 
 ALL_CN = 'all_cn.h5'
 
