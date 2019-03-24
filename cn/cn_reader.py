@@ -7,92 +7,154 @@ import pandas as pd
 import tushare as ts
 
 from _base_reader import (_base_reader)
+from _utils import(_mkdir_cache, _read_buffer)
+from _network import(_endless_get)
+from _const import(DATABASE_FILENAME)
 
 URL_TEMPLATE = 'http://money.finance.sina.com.cn/corp/go.php/vDOWN_%s/displaytype/4/stockid/%s/ctrl/all.phtml'
 
+CN     = 'cn'
+INFO   = 'info'
+DAILY  = 'daily'
+REPORT = 'report'
+
+CATEGORY = [INFO, DAILY, REPORT]
+
+SYMBOLS    = 'symbols'
+TABLE_TYPE = 'table_type'
+SUBJECTS   = 'subjects'
+DATE       = 'date'
+
 class cn_reader(_base_reader):
-    """
+    '''
     Parameters
     ----------
     path: {str}
         Alhena2 path
-    symbols : {List[str], None}
-        String symbol of like of symbols
-    start : string, (defaults to '1/1/2007')
+    symbols : {list[(str, int)], int, str, None}
+        String symbol of like of symbols. If symbols is int or list[int], at-least has
+        Python type 
+    start: string, (defaults to '1/1/2007')
         Starting date, timestamp. Parses many different kind of date
         representations (e.g., 'JAN-01-2010', '1/1/10', 'Jan, 1, 1980')
-    end : string, (defaults to today)
+    end: string, (defaults to today)
         Ending date, timestamp. Same format as starting date.
-    retries: {int}
-        timeout retries, -1 stands forever
-    """
-    def __init__(self, path, symbols=None, start='1/1/2007', end=None, retries=-1):
-        super().__init__(path=path, symbols=symbols, start=start, end=end, retries=retries)
+    skip_time: int, (default to 30)
+        skip update if cache file modification time is less than skip_time, 
+        in days
+    skip_size: int, (default to 10)
+        skip update if cache file size is less than skip_size, in KB
+    '''
+    def __init__(self, path, symbols=None, start='1/1/2007', end=None, **kwargs):
+        super().__init__(path=path, symbols=symbols, start=start, end=end, **kwargs)
 
-        (path_cn, path_info, path_daily, path_report) = self._helper_pre_cache('cn', ['info', 'daily', 'report'])
+        (_path_cn, _path_info, _path_daily, _path_report) = _mkdir_cache(self._root, CN, CATEGORY)
 
-        self.path['cn']     = path_cn
-        self.path['info']   = path_info
-        self.path['daily']  = path_daily
-        self.path['report'] = path_report
+        self._path[CN]     = _path_cn
+        self._path[INFO]   = _path_info
+        self._path[DAILY]  = _path_daily
+        self._path[REPORT] = _path_report
 
-        self.skip_time = 30
-        self.skip_size = 10
+        # network utils
+        self._skip_time = kwargs.pop('skip_time', 30)
+        self._skip_size = kwargs.pop('skip_size', 10)
 
-        self.symbols = self._read_symbols(symbols)
+        # XXX: self._symbols will be changed in self.update()
+        if isinstance(self._symbols, (str, int)):
+            self._symbols = [self._symbols]
 
-    def update(self):
+        self._symbols = self._read_symbols([str(s) for s in self._symbols])
 
-        self._cache_info()
+    def update(self, **kwargs):
+        '''
+        update cache
+        @params:
+        category: {list[str], str, None} 
+            category to update, list or str of ['info', 'daily', 'report'] or None(all)
+        '''
+        self._category = kwargs.pop('category', CATEGORY)
+
+        if self._category is None:
+            self._category = CATEGORY
+        elif isinstance(self._category, str):
+            self._category = [self._category]
+
+        if INFO in self._category:
+            self._cache_info()
+            # XXX: always use updated symbols from info
+            self._symbols = self._read_symbols(self._symbols)
 
         # FIXME: multiprocess pool
-        for (i, s) in enumerate(self.symbols):
-            self._helper_progress_bar(i, len(self.symbols))
-            self._cache_url_report(s)
+        if DAILY in self._category:
+            print('cn-daily update has not been implemented', file=sys.stderr)
 
-        sys.stderr.write('cn-daily update has not been implemented')
+        if REPORT in self._category:
+            for (i, s) in enumerate(self._symbols):
+                self._cache_url_report(s)
 
-    def info(self):
+    def build(self, file=None, **kwargs):
+        '''
+        build database file
+        @params:
+        file: {str}
+            file to be built, default is cn_database.h5
+        update: boolen
+            do full-update first
+        -------------
+        database file has three Dataframe, as below
+        Dataframe info:
+                      name, industry  
+            symbols  
+            000001  
+        Dataframe report:
+                                      table_type 
+                                      subject
+            symbols  date(datetime)
+            000001   1991-01-01
+        '''
+        if kwargs.pop('update', False):
+            self.update(category=None)
 
-        info_file = os.path.join(self.path['info'], 'info.csv')
+        if file is None:
+            file = os.path.join(self._path[CN], DATABASE_FILENAME)
 
-        if not os.path.exists(info_file):
-            raise OSError('info file %s not exist (may update first?)' % info_file)
+        # XXX: auto detect file extension
+        _info = self._read_info()
+        _info.to_hdf(file, key=INFO, mode='w')
 
-        info = pd.read_csv(info_file, header=0, dtype={'code': str}, encoding=self.encoding)
-        info.set_index('code', inplace=True)
+        _report = self._read_reports()
+        _report.to_hdf(file, key=REPORT, mode='a')
 
-        return info.loc[self.symbols]
+    def _is_need_udpate(self, file):
+        '''
+        is a cache file need to be updated
+        @params:
+        file:
+            file to check
+        '''
+        if not os.path.exists(file):
+            return True
 
-    def daily(self, subjects=None, ex=None, freq='D'):
+        # file mtime
+        mtime = os.path.getmtime(file)
+        if time.time() - mtime > self._skip_time * (60 * 60 * 24):
+            return True
 
-        keys   = []
-        result = []
-        for sym in self.symbols:
+        # file size
+        size = os.stat(file).st_size
+        if size < self._skip_size * 1024:
+            return True
 
-            t = self._read_one_daily(sym, subjects=subjects, ex=ex, freq=freq)
-            if not t is None:
-                keys.append(sym)
-                result.append(t)
-
-        return pd.concat(result, keys=keys, names=['symbols', 'date'])
-
-    def report(self, subjects=None):
-
-        keys   = []
-        result = []
-        for sym in self.symbols:
-
-            t = self._read_one_report(sym, subjects=subjects)
-            if not t is None:
-                keys.append(sym)
-                result.append(t)
-
-        return pd.concat(result, keys=keys, names=['symbols', 'date'])
+        return False
 
     def _read_symbols(self, symbols=None):
-
-        info_file = os.path.join(self.path['info'], 'info.csv')
+        '''
+        read in symbols
+        @params:
+        symbols: {List[str], None}
+            symbols to be checked, or None to use internal(usually all) 
+        '''
+        info_file = os.path.join(self._path[INFO], '%s.csv' % INFO)
 
         # FIXME: always update info? currently may ignore some
         #        very new input symbols
@@ -100,7 +162,7 @@ class cn_reader(_base_reader):
             self._cache_info()
 
         # read from list
-        lines = self._helper_read_buffer(info_file)
+        lines = _read_buffer(info_file, encoding=self._encoding)
 
         all_symbols = []
         # skip info head
@@ -115,26 +177,11 @@ class cn_reader(_base_reader):
 
         return all_symbols
 
-    def _is_need_udpate(self, file):
-
-        if not os.path.exists(file):
-            return True
-
-        # mtime
-        mtime = os.path.getmtime(file)
-        if time.time() - mtime > self.skip_time * (60 * 60 * 24):
-            return True
-
-        # size
-        size = os.stat(file).st_size
-        if size < self.skip_size * 1024:
-            return True
-
-        return False
-
     def _cache_info(self):
-
-        file = os.path.join(self.path['info'], 'info.csv')
+        '''
+        cache info file from tushare
+        '''
+        file = os.path.join(self._path[INFO], '%s.csv' % INFO)
 
         if not self._is_need_udpate(file):
             return
@@ -150,54 +197,87 @@ class cn_reader(_base_reader):
         ts_id.index.astype(str)
 
         try:
-            ts_id.to_csv(file, sep=',', encoding=self.encoding)
+            ts_id.to_csv(file, sep=',', encoding=self._encoding)
         except:
             raise OSError('writing %s error' % file)
 
-    @staticmethod
-    def __is_integrity_report(text):
-        # try parse the fisrt line
-        first_line = text.split('\n', maxsplit=1)[0]
-
-        r = re.compile(r'^报表日期\s+\d{8}\s+')
-        if not r.match(first_line):
-            return False
-
-        return True
-
     def _cache_url_report(self, symbol):
-
+        '''
+        cache three report files of one symbol
+        @params:
+        symbol: {str}
+            symbol        
+        '''
         sym = symbol
-        if isinstance(symbol, int):
-            sym = str(symbol)
 
-        file = os.path.join(self.path['report'], '%s.csv' % sym)
+        _symbol_folder = os.path.join(self._path[REPORT], sym)
+        if not os.path.exists(_symbol_folder):
+            os.mkdir(_symbol_folder)
 
-        if not self._is_need_udpate(file):
-            # FIXME: more check, parse is in Quarter
-            return
-
-        tables = []
         for table_type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
-
             url = URL_TEMPLATE % (table_type, sym)
 
-            while(1):
-                (text, raw) = self._helper_get_one_url(url, None, 'gb2312') # tempz
-                if self.__is_integrity_report(text):
-                    break
+            file = os.path.join(_symbol_folder, '%s.csv' % table_type)
 
+            if not self._is_need_udpate(file):
+                # FIXME: more check, parse is in Quarter
+                return
+
+            while(1):
+                (text, raw) = _endless_get(url, None, 'gb2312') # tempz
+                # try parse the fisrt line
+                first_line = text.split('\n', maxsplit=1)[0]
+
+                r = re.compile(r'^报表日期\s+\d{8}\s+')
+                if not r.match(first_line):
+                    continue
+
+                break
+
+            # XXX: transpose report file to use parse_dates, see self._read_one_report()
             t = pd.read_csv(io.BytesIO(raw), delim_whitespace=True, header=0, \
                             index_col=0, encoding='gb2312').transpose()
 
-            # FIXME: remove N/A second level like '流动' ?
             t.drop('19700101', inplace=True)
             t.drop('单位', axis=1, inplace=True)
             t.dropna(axis=1, how='all', inplace=True)
 
-            tables.append(t)
+            t.to_csv(file, sep=',', encoding=self._encoding)
 
-        pd.concat(tables, axis=1).to_csv(file, sep=',', encoding=self.encoding)
+    def _read_info(self):
+        '''
+        read info into Dataframe
+        '''
+        info_file = os.path.join(self._path[INFO], '%s.csv' % INFO)
+
+        if os.path.exists(info_file):
+            t = pd.read_csv(info_file, header=0, dtype={'code': str}, \
+                            encoding=self._encoding)
+            t.rename({'code': SYMBOLS}, axis=1, inplace=True)
+            t.set_index(SYMBOLS, inplace=True)
+        else:
+            raise OSError('info file: %s not exists' % info_file)
+
+        return t
+
+    def _read_reports(self):
+        '''
+        read reports and output Dataframe
+        the output Dataframe:
+                                    table_type
+                                    subjects
+            symbols  date(datetime)
+            000001   1991-01-01
+        ''' 
+        tables = []
+        for s in self._symbols:
+            t = self._read_one_report(s)
+            tables.append((t, s))
+
+        all_reports = pd.concat([_[0] for _ in tables], keys=[_[1] for _ in tables], \
+                                names=[SYMBOLS, DATE]) 
+
+        return all_reports
 
     # XXX: deprecated for Alhena1 daily database only
     def __inv_ex(self, df_ex, df_daily):
@@ -238,11 +318,11 @@ class cn_reader(_base_reader):
         if subjects is None:
             subjects = ['close']
 
-        file = os.path.join(self.path['daily'], symbol + '.csv')
+        file = os.path.join(self._path[DAILY], symbol + '.csv')
 
         # FIXME:
         if not os.path.exists(file):
-            sys.stderr.write(file + ' does not exist')
+            print(file + ' does not exist', file=sys.stderr)
             return None
 
         all = self._helper_read_buffer(file)
@@ -270,14 +350,14 @@ class cn_reader(_base_reader):
 
         columns = ['open', 'high', 'low', 'close', 'vol', 'equity']
         df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
-                               names=columns, parse_dates=True, encoding=self.encoding)
+                               names=columns, parse_dates=True, encoding=self._encoding)
 
         # fill time-date gap in original .csv
         df_daily = df_daily.asfreq('d', method='ffill')
 
         columns = ['gift', 'donation', 'bouns']
         df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
-                            names=columns, parse_dates=True, encoding=self.encoding)
+                            names=columns, parse_dates=True, encoding=self._encoding)
 
         if ex is None:
             df_daily = self.__inv_ex(df_ex=df_ex, df_daily=df_daily)
@@ -296,42 +376,32 @@ class cn_reader(_base_reader):
         else:
             return df_daily.asfreq(freq, method='ffill')[subjects]
 
-    def _read_one_report(self, symbol, subjects=None):
+    def _read_one_report(self, symbol):
+        '''
+        read-in three table sheets
+        the output Dataframe:
+                            table_type
+                            subjects
+            date(datetime)
+            1991-01-01
+        @params:
+        symbol: {str}
+            symbol to read 
+        '''
+        tables = []
+        for table_type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
+            file = os.path.join(self._path[REPORT], symbol, '%s.csv' % table_type)
 
-        file = os.path.join(self.path['report'], symbol + '.csv')
+            # FIXME: maybe pass?
+            if not os.path.exists(file):
+                raise OSError('report file: %s not exists' % file)
 
-        # FIXME:
-        if not os.path.exists(file):
-            sys.stderr.write(file + ' does not exist')
-            return None
+            t = pd.read_csv(file, header=0, index_col=0, parse_dates=True, encoding=self._encoding)\
 
-        def __sanitize(lines):
+            tables.append((t, table_type))
 
-            # FIXME: workaround for 002886: '20141231.1',
-            #        use dot version?
-            r = re.compile(r'^(\d+)\.\d+,')
+        _report = pd.concat([_[0] for _ in tables], axis=1, keys=[_[1] for _ in tables],
+                            names=[TABLE_TYPE, SUBJECTS])
+        _report.index.name = DATE
 
-            return [l for l in lines if not r.match(l)]
-
-        all_lines = __sanitize(self._helper_read_buffer(file))
-
-        report = pd.read_csv(io.StringIO(''.join([s + '\n' for s in all_lines])),
-                             header=0, index_col=0, parse_dates=True, \
-                             encoding=self.encoding)
-
-        daily = self._read_one_daily(symbol, subjects=['close'], freq='Q')
-
-        df = pd.concat([report, daily], axis=1)
-
-        # unification
-        df.rename(columns = {'实收资本(或股本)': '股本'}, inplace=True)
-
-        df['PE']   = df['close'] / df['基本每股收益(元/股)']
-        df['ROE']  = df['五、净利润'] / (df['资产总计'] - df['负债合计'])
-        df['PB']   = (df['close'] * df['股本']) / (df['资产总计'] - df['负债合计'])
-        df['CASH'] = df['经营活动产生的现金流量净额'] / df['五、净利润']
-
-        if subjects is None:
-            return df
-        else:
-            return df[subjects]
+        return _report

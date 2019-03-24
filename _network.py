@@ -2,6 +2,26 @@
 
 import requests
 
+def _endless_get(url, param=None, encoding='utf-8'):
+    '''
+    endless get one url
+    @params:
+    url: {str}
+    param: network param
+        only None for now
+    encoding: {str}
+        return result in 'encoding'
+    '''
+    if not param is None:
+        raise NotImplementedError
+
+    while(1):
+        (text, raw) = _get_one_url(url, retries=-1, encoding=encoding)
+
+        break
+
+    return (text, raw)
+
 def _get_one_url(url, retries=-1, encoding='utf-8'):
     '''
     Parameters
