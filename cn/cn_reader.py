@@ -1,6 +1,6 @@
 # coding: utf-8
 
-import os, time, io, sys
+import os, time, datetime, io, sys
 import re
 import numpy as np
 import pandas as pd
@@ -11,7 +11,14 @@ from _utils import(_mkdir_cache, _read_buffer)
 from _network import(_endless_get)
 from _const import(DATABASE_FILENAME)
 
-URL_TEMPLATE = 'http://money.finance.sina.com.cn/corp/go.php/vDOWN_%s/displaytype/4/stockid/%s/ctrl/all.phtml'
+URL_REPORT_T = 'http://money.finance.sina.com.cn/corp/go.php/vDOWN_%s/displaytype/4/stockid/%s/ctrl/all.phtml'
+URL_DAILY_T  = 'http://money.finance.sina.com.cn/corp/go.php/vMS_MarketHistory/stockid/%s.phtml?year=%d&jidu=%d'
+URL_XDR_T    = 'http://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/%s.phtml'
+
+DAILY_TAB_MATCH = '季度历史交易'
+XDR_TAB_MATCH = '分红'
+REPORT_DATE = '报表日期'
+UNIT = '单位'
 
 CN     = 'cn'
 INFO   = 'info'
@@ -70,11 +77,11 @@ class cn_reader(_base_reader):
         update cache
         @params:
         category: {list[str], str, None} 
-            category to update, list or str of ['info', 'daily', 'report'] or None(all)
+            category to update, list or str of ['info', 'daily', 'report', 'all'] or None(all)
         '''
         self._category = kwargs.pop('category', CATEGORY)
 
-        if self._category is None:
+        if self._category is None or self._category == 'all':
             self._category = CATEGORY
         elif isinstance(self._category, str):
             self._category = [self._category]
@@ -86,7 +93,8 @@ class cn_reader(_base_reader):
 
         # FIXME: multiprocess pool
         if DAILY in self._category:
-            print('cn-daily update has not been implemented', file=sys.stderr)
+            for (i, s) in enumerate(self._symbols):
+                self._cache_daily(s)
 
         if REPORT in self._category:
             for (i, s) in enumerate(self._symbols):
@@ -98,7 +106,7 @@ class cn_reader(_base_reader):
         @params:
         file: {str}
             file to be built, default is cn_database.h5
-        update: boolen
+        update: boolean
             do full-update first
         -------------
         database file has three Dataframe, as below
@@ -125,24 +133,30 @@ class cn_reader(_base_reader):
         _report = self._read_reports()
         _report.to_hdf(file, key=REPORT, mode='a')
 
-    def _is_need_udpate(self, file):
+    def _is_need_udpate(self, file, skip_time=None, skip_size=None):
         '''
         is a cache file need to be updated
         @params:
         file:
             file to check
+        skip_time: {int}
+            skip update if cache file modification time is less than skip_time, 
+            in days
+        skip_size: {int}
+            skip update if cache file size is less than skip_size, in KB
         '''
         if not os.path.exists(file):
             return True
 
         # file mtime
         mtime = os.path.getmtime(file)
-        if time.time() - mtime > self._skip_time * (60 * 60 * 24):
+        if not skip_time is None and \
+           time.time() - mtime > skip_time * (60 * 60 * 24):
             return True
 
         # file size
         size = os.stat(file).st_size
-        if size < self._skip_size * 1024:
+        if not skip_size is None and size < skip_size * 1024:
             return True
 
         return False
@@ -183,7 +197,8 @@ class cn_reader(_base_reader):
         '''
         file = os.path.join(self._path[INFO], '%s.csv' % INFO)
 
-        if not self._is_need_udpate(file):
+        if not self._is_need_udpate(file, skip_time=self._skip_time, \
+                                    skip_size=self._skip_size):
             return
 
         try:
@@ -201,6 +216,87 @@ class cn_reader(_base_reader):
         except:
             raise OSError('writing %s error' % file)
 
+    def _cache_daily(self, symbol, force=False):
+        '''
+        cache daily data
+        @params:
+        symbol: {str}
+            symbol
+        force: {boolean}
+            force to update, even if has caches
+        '''
+        _symbol_folder = os.path.join(self._path[DAILY], symbol)
+        if not os.path.exists(_symbol_folder):
+            os.mkdir(_symbol_folder)
+
+        old = None
+        if force != True:
+            try:
+                old = self._read_one_daily(symbol)
+            except OSError:
+                pass
+
+        def __date_range(start, end):
+            def __season(m):
+                if not m in range(1, 12):
+                    raise ValueError('m: %d is not valid' % m)
+                return (m-1) // 3 + 1
+
+            e_year   = int(end.split('-')[0])
+            s_year   = int(start.split('-')[0])
+            s_season = __season(int(start.split('-')[1]))
+
+            for y in reversed(range(s_year, e_year+1)):
+                if y == e_year:
+                    e_season = __season(int(end.split('-')[1]))
+                else:
+                    e_season = 4
+                for s in reversed(range(1, e_season+1)):
+                    if not (y == s_year and s < s_season):
+                        yield (y, s)
+
+        today = datetime.datetime.now().strftime('%Y-%m-%d')
+
+        tables = []
+        if not old is None:
+            start = pd.to_datetime(str(old.index.values[-1])).strftime('%Y-%m-%d')
+            tables.append(old)
+        else:
+            # use XDR to get start date
+            # FIXME: Dataframe is messed up
+            url = URL_XDR_T % symbol
+            (text, _) = _endless_get(url, None, 'gb2312')
+            xdr = pd.read_html(text, match=XDR_TAB_MATCH, header=0, 
+                               skiprows=1, index_col=0, attrs={'id': 'sharebonus_1'},
+                               parse_dates=True)
+
+            _ = pd.to_datetime(str(xdr[0].index.values[-1])).strftime('%Y-%m-%d')
+            start = '%s-01-01' % _.split('-')[0]
+            
+        for (y, s) in __date_range(start=start, end=today):
+            url = URL_DAILY_T % (symbol, y, s)
+
+            (text, raw) = _endless_get(url, None, 'gb2312')
+            try:
+                season = pd.read_html(text, match=DAILY_TAB_MATCH, header=0, 
+                                      index_col=0, skiprows=1, parse_dates=True)
+            except ValueError:
+                # tempz
+                if not os.path.exists('log'):
+                    os.mkdir('log')
+                _log = os.path.join('log', 'daily_%s_%d_%d.log' % (symbol, y, s))
+                with open(_log, encoding='gb2312', mode='w') as f:
+                    f.write(text)
+                continue
+
+            tables.append(season[0])
+
+        file = os.path.join(self._path[DAILY], symbol, 'daily.csv')
+
+        new = pd.concat(tables).drop_duplicates()
+        new.sort_index(ascending=False, inplace=True) # descending for easy-reading
+        new.to_csv(file, sep=',', encoding=self._encoding)
+
     def _cache_url_report(self, symbol):
         '''
         cache three report files of one symbol
@@ -215,11 +311,12 @@ class cn_reader(_base_reader):
             os.mkdir(_symbol_folder)
 
         for table_type in ['BalanceSheet', 'ProfitStatement', 'CashFlow']:
-            url = URL_TEMPLATE % (table_type, sym)
+            url = URL_REPORT_T % (table_type, sym)
 
             file = os.path.join(_symbol_folder, '%s.csv' % table_type)
 
-            if not self._is_need_udpate(file):
+            if not self._is_need_udpate(file, skip_time=self._skip_time,\
+                                        skip_size=self._skip_size):
                 # FIXME: more check, parse is in Quarter
                 return
 
@@ -228,7 +325,7 @@ class cn_reader(_base_reader):
                 # try parse the fisrt line
                 first_line = text.split('\n', maxsplit=1)[0]
 
-                r = re.compile(r'^报表日期\s+\d{8}\s+')
+                r = re.compile(r'^%s\s+\d{8}\s+' % REPORT_DATE)
                 if not r.match(first_line):
                     continue
 
@@ -239,7 +336,7 @@ class cn_reader(_base_reader):
                             index_col=0, encoding='gb2312').transpose()
 
             t.drop('19700101', inplace=True)
-            t.drop('单位', axis=1, inplace=True)
+            t.drop(UNIT, axis=1, inplace=True)
             t.dropna(axis=1, how='all', inplace=True)
 
             t.to_csv(file, sep=',', encoding=self._encoding)
@@ -260,6 +357,27 @@ class cn_reader(_base_reader):
 
         return t
 
+    def _read_daily(self, category='daily'):
+        '''
+        read daily Dataframe
+        the output Dataframe:
+                                    subjects('open', 'close' ...)
+            symbols date(datetime)
+            000001  1991-01-01
+        @params:
+        category: {str: 'daily', 'xdr' or 'all'}
+            category to read, only support 'daily' now
+        '''
+        tables = []
+        for s in self._symbols:
+            t = self._read_one_daily(s)
+            tables.append((t, s))
+
+        all_daily = pd.concat([_[0] for _ in tables], keys=[_[1] for _ in tables], \
+                              names=[SYMBOLS, DATE])
+
+        return all_daily
+
     def _read_reports(self):
         '''
         read reports and output Dataframe
@@ -279,102 +397,33 @@ class cn_reader(_base_reader):
 
         return all_reports
 
-    # XXX: deprecated for Alhena1 daily database only
-    def __inv_ex(self, df_ex, df_daily):
+    def _read_one_daily(self, symbol, category='daily'):
         '''
-        Parameters
-        ----------
-        df_ex: {pd.Dataframe}
-            ex info in dataframe format
-        df_daily: {pd.Dataframe}
-            daily info in dataframe format
+        read-in one daily, in *ascending*
+        the output Dataframe:
+                                subjects('open', 'close' ...)
+            date(datetime)
+            1991-01-01
+        @params:
+        symbol: {str}
+            symbol to read        
+        category: {str: 'daily', 'xdr' or 'all'}
+            category to read, only support 'daily' now
         '''
+        if category != 'daily':
+            raise NotImplementedError('%s is not supported' % category)
 
-        def __one_inv_ex(series, gift, donation, bouns):
-            return series * ( 1 + gift / 10 + donation / 10 ) + bouns / 10
+        file = os.path.join(self._path[DAILY], symbol, 'daily.csv')
 
-        for xdr_date in df_ex.index.values:
-
-            end = xdr_date - np.timedelta64(1, 'D')
-
-            gift     = (df_ex.loc[xdr_date])['gift']
-            donation = (df_ex.loc[xdr_date])['donation']
-            bouns    = (df_ex.loc[xdr_date])['bouns']
-
-            df_daily.loc[:end, 'open'] = __one_inv_ex(df_daily.loc[:end, 'open'], \
-                                                      gift=gift, donation=donation, bouns=bouns)
-            df_daily.loc[:end, 'high'] = __one_inv_ex(df_daily.loc[:end, 'high'], \
-                                                      gift=gift, donation=donation, bouns=bouns)
-            df_daily.loc[:end, 'low'] = __one_inv_ex(df_daily.loc[:end, 'low'], \
-                                                     gift=gift, donation=donation, bouns=bouns)
-            df_daily.loc[:end, 'close'] = __one_inv_ex(df_daily.loc[:end, 'close'], \
-                                                       gift=gift, donation=donation, bouns=bouns)
-            # FIXME: vol
-
-        return df_daily
-
-    def _read_one_daily(self, symbol, subjects=None, ex=None, freq='D'):
-
-        if subjects is None:
-            subjects = ['close']
-
-        file = os.path.join(self._path[DAILY], symbol + '.csv')
-
-        # FIXME:
         if not os.path.exists(file):
-            print(file + ' does not exist', file=sys.stderr)
-            return None
+            raise OSError('daily file: %s does not exist' % file)
 
-        all = self._helper_read_buffer(file)
+        # FIXME: integrate
+        daily = pd.read_csv(file, header=0, index_col=0, 
+                            parse_dates=True, encoding=self._encoding)
+        daily.sort_index(inplace=True)
 
-        # FIXME: version check
-
-        # copied from Alhena
-        # about '20' things: workaround for duplicated items
-        r  = re.compile(r'^#\s+(\d+-\d+-\d+,[.0-9]+,[.0-9]+,[.0-9]+)')
-        r1 = re.compile(r'20\d\d-\d+-\d+')
-
-        lines_ex = []
-        i_daily = 0
-        for (i, l) in enumerate(all):
-            m = r.match(l)
-            if m:
-                entry = m.group(1)
-                if r1.match(entry):
-                    lines_ex.append(entry)
-            elif i > 0:
-                i_daily = i
-                break
-
-        lines_daily = all[i_daily:]
-
-        columns = ['open', 'high', 'low', 'close', 'vol', 'equity']
-        df_daily = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_daily])), header=None, \
-                               names=columns, parse_dates=True, encoding=self._encoding)
-
-        # fill time-date gap in original .csv
-        df_daily = df_daily.asfreq('d', method='ffill')
-
-        columns = ['gift', 'donation', 'bouns']
-        df_ex = pd.read_csv(io.StringIO(''.join([s + '\n' for s in lines_ex])), header=None, \
-                            names=columns, parse_dates=True, encoding=self._encoding)
-
-        if ex is None:
-            df_daily = self.__inv_ex(df_ex=df_ex, df_daily=df_daily)
-        elif ex == 'backward':
-            # XXX: df_daily is backward default
-            pass
-        else:
-            raise ValueError('%s is not supported' % ex)
-
-        # combine with ex-info
-        df_daily = pd.concat([df_daily, df_ex], axis=1)
-
-        if freq.lower() == 'd':
-            # as 'D', only provide original data, no fill
-            return df_daily[subjects]
-        else:
-            return df_daily.asfreq(freq, method='ffill')[subjects]
+        return daily
 
     def _read_one_report(self, symbol):
         '''
@@ -396,6 +445,7 @@ class cn_reader(_base_reader):
             if not os.path.exists(file):
                 raise OSError('report file: %s not exists' % file)
 
+            # FIXME: integrated
             t = pd.read_csv(file, header=0, index_col=0, parse_dates=True, encoding=self._encoding)\
 
             tables.append((t, table_type))

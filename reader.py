@@ -65,7 +65,7 @@ class cn(_base):
         if not super().update() is True:
             return False
 
-        self._reader.update()
+        self._reader.update(category='daily') # tempz
 
         return True
 
