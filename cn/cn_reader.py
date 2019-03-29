@@ -2,6 +2,7 @@
 
 import os, time, datetime, io, sys
 import re
+import bs4
 import numpy as np
 import pandas as pd
 import tushare as ts
@@ -70,12 +71,16 @@ class cn_reader(_base_reader):
         if isinstance(self._symbols, (str, int)):
             self._symbols = [self._symbols]
 
-        self._symbols = self._read_symbols([str(s) for s in self._symbols])
+        self._symbols = self._read_symbols(self._symbols)
 
-    def update(self, **kwargs):
+    def update(self, cb_progress=None, **kwargs):
         '''
         update cache
         @params:
+        cb_progress: {function}
+            call back function to display progress, this function should have
+            prototype of cb_progress(inter, total) inter is {int}, total is {int},
+            inter is the current inter point, total is the total points
         category: {list[str], str, None} 
             category to update, list or str of ['info', 'daily', 'report', 'all'] or None(all)
         '''
@@ -86,6 +91,10 @@ class cn_reader(_base_reader):
         elif isinstance(self._category, str):
             self._category = [self._category]
 
+        def _progress(i, t):
+            if not cb_progress is None and callable(cb_progress):
+                cb_progress(i, len(self._symbols))
+
         if INFO in self._category:
             self._cache_info()
             # XXX: always use updated symbols from info
@@ -94,11 +103,17 @@ class cn_reader(_base_reader):
         # FIXME: multiprocess pool
         if DAILY in self._category:
             for (i, s) in enumerate(self._symbols):
+                _progress(i, len(self._symbols))
                 self._cache_daily(s)
+
+            _progress(len(self._symbols), len(self._symbols))
 
         if REPORT in self._category:
             for (i, s) in enumerate(self._symbols):
+                _progress(i, len(self._symbols))
                 self._cache_url_report(s)
+
+            _progress(len(self._symbols), len(self._symbols))
 
     def build(self, file=None, **kwargs):
         '''
@@ -184,7 +199,7 @@ class cn_reader(_base_reader):
             all_symbols.append(str(l.split(',')[0]))
 
         if not symbols is None:
-            symbols = [str(s) for s in symbols if s in all_symbols]
+            symbols = [str(s) for s in symbols if str(s) in all_symbols]
             assert symbols # prevent ill-input, but can be removed
 
             return symbols
@@ -236,12 +251,12 @@ class cn_reader(_base_reader):
             except OSError:
                 pass
 
-        def __date_range(start, end):
-            def __season(m):
-                if not m in range(1, 12):
-                    raise ValueError('m: %d is not valid' % m)
-                return (m-1) // 3 + 1
+        def __season(m):
+            if not m in range(1, 12):
+                raise ValueError('m: %d is not valid' % m)
+            return (m-1) // 3 + 1
 
+        def __date_range(start, end):
             e_year   = int(end.split('-')[0])
             s_year   = int(start.split('-')[0])
             s_season = __season(int(start.split('-')[1]))
@@ -262,16 +277,18 @@ class cn_reader(_base_reader):
             start = pd.to_datetime(str(old.index.values[-1])).strftime('%Y-%m-%d')
             tables.append(old)
         else:
-            # use XDR to get start date
-            # FIXME: Dataframe is messed up
-            url = URL_XDR_T % symbol
-            (text, _) = _endless_get(url, None, 'gb2312')
-            xdr = pd.read_html(text, match=XDR_TAB_MATCH, header=0, 
-                               skiprows=1, index_col=0, attrs={'id': 'sharebonus_1'},
-                               parse_dates=True)
+            # pre read to get start
+            (y, s) = (int(today.split('-')[0]), __season(int(today.split('-')[1])))
+            url = url = URL_DAILY_T % (symbol, y, s)
 
-            _ = pd.to_datetime(str(xdr[0].index.values[-1])).strftime('%Y-%m-%d')
-            start = '%s-01-01' % _.split('-')[0]
+            try:
+                (text, raw) = _endless_get(url, None, 'gb2312')
+                soup = bs4.BeautifulSoup(text, features='lxml')
+                tags = soup.find_all('select', attrs={'name': 'year'})[0]
+                _ = tags.text.splitlines()[-1]
+                start = '%s-01-01' % _
+            except:
+                start = '1991-01-01'
             
         for (y, s) in __date_range(start=start, end=today):
             url = URL_DAILY_T % (symbol, y, s)
@@ -285,7 +302,7 @@ class cn_reader(_base_reader):
                 if not os.path.exists('log'):
                     os.mkdir('log')
                 _log = os.path.join('log', 'daily_%s_%d_%d.log' % (symbol, y, s))
-                with open(_log, encoding='gb2312', mode='w') as f:
+                with open(_log, encoding=self._encoding, mode='w') as f:
                     f.write(text)
                 continue
 

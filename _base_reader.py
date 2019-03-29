@@ -37,7 +37,15 @@ class _base_reader():
         self._encoding = 'utf-8'
 
     @abstractmethod
-    def update(self, **kwargs):
+    def update(self, cb_progress=None, **kwargs):
+        '''
+        update cache
+        @params:
+        cb_progress: {function}
+            call back function to display progress, this function should have
+            prototype of cb_progress(inter, total) inter is {int}, total is {int},
+            inter is the current inter point, total is the total points
+        '''
         raise NotImplementedError
 
     @abstractmethod

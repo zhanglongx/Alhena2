@@ -5,6 +5,32 @@ from abc import (ABCMeta, abstractmethod)
 
 from cn.cn_reader import (cn_reader)
 
+def _progress_bar(inter, total):
+    # copied from https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
+
+    # Print iterations progress
+    def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>'):
+        """
+        Call in a loop to create terminal progress bar
+        @params:
+            iteration   - Required  : current iteration (Int)
+            total       - Required  : total iterations (Int)
+            prefix      - Optional  : prefix string (Str)
+            suffix      - Optional  : suffix string (Str)
+            decimals    - Optional  : positive number of decimals in percent complete (Int)
+            length      - Optional  : character length of bar (Int)
+            fill        - Optional  : bar fill character (Str)
+        """
+        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+        filledLength = int(length * iteration // total)
+        bar = fill * filledLength + '-' * (length - filledLength)
+        print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+        # Print New Line on Complete
+        if iteration == total:
+            print()
+
+    return printProgressBar(iteration=inter, total=total, prefix='Progress:', suffix='Complete', length=30)
+
 class _base():
     __metaclass__ = ABCMeta
 
@@ -59,13 +85,15 @@ class cn(_base):
     def __init__(self, path):
         super().__init__(path)
 
-        self._reader = cn_reader(path, ['000651', '600060']) # tempz
+        # self._reader = cn_reader(path, symbols='000001') # tempz
+        self._reader = cn_reader(path, symbols=None) # tempz
 
     def update(self):
         if not super().update() is True:
             return False
 
-        self._reader.update(category='daily') # tempz
+        # self._reader.update(category='daily') # tempz
+        self._reader.update(cb_progress=_progress_bar, category='daily')
 
         return True
 

@@ -1,6 +1,9 @@
 # coding: utf-8
 
 import requests
+import time
+
+SLEEP_IN_S = 10
 
 def _endless_get(url, param=None, encoding='utf-8'):
     '''
@@ -15,10 +18,7 @@ def _endless_get(url, param=None, encoding='utf-8'):
     if not param is None:
         raise NotImplementedError
 
-    while(1):
-        (text, raw) = _get_one_url(url, retries=-1, encoding=encoding)
-
-        break
+    (text, raw) = _get_one_url(url, retries=-1, encoding=encoding)
 
     return (text, raw)
 
@@ -37,7 +37,7 @@ def _get_one_url(url, retries=-1, encoding='utf-8'):
     # FIXME: support retries 
     while(1):
         try:
-            resp = requests.get(url=url, headers=headers, timeout=30)
+            resp = requests.get(url=url, headers=headers, timeout=SLEEP_IN_S)
         except:
             continue
 
@@ -47,6 +47,7 @@ def _get_one_url(url, retries=-1, encoding='utf-8'):
         resp.encoding = encoding
 
         # TODO: more check?
+        time.sleep(SLEEP_IN_S)
         break
 
     return (resp.text, resp.content)
