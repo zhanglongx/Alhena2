@@ -369,6 +369,7 @@ class cn_reader(_base_reader):
             pass
 
         xdr.sort_index(ascending=False, inplace=True) # descending for easy-reading
+        xdr.dropna(how='all', inplace=True)
         file = os.path.join(self._path[DAILY], symbol, 'xdr.csv')
 
         xdr.iloc[slice(None), 0:3].to_csv(file, sep=',', encoding=self._encoding)
@@ -512,7 +513,6 @@ class cn_reader(_base_reader):
             xdr_df = pd.read_csv(file, header=0, index_col=0,
                                  parse_dates=True, encoding=self._encoding)
             xdr_df.sort_index(inplace=True)
-            xdr_df.dropna(how='all', inplace=True)
 
             # concat to append xdr dates
             daily = pd.concat([daily, xdr_df], axis=1)
