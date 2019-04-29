@@ -93,12 +93,12 @@ class cn(_base):
             return False
 
         # self._reader.update(category='daily') # tempz
-        self._reader.update(cb_progress=_progress_bar, category='daily')
+        self._reader.update(cb_progress=_progress_bar, category=['daily', 'report'])
 
         return True
 
     def build(self, file=None):
-        self._reader.build(file=file)
+        self._reader.build(file=file, xdr='fill')
 
 def main():
     parser = argparse.ArgumentParser(description='wrapper for Alhena2 reader')

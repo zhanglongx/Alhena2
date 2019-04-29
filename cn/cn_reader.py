@@ -20,6 +20,16 @@ DAILY_TAB_MATCH = '季度历史交易'
 XDR_TAB_MATCH = '分红'
 REPORT_DATE = '报表日期'
 UNIT = '单位'
+PLANE = '进度'
+CARRIED = '实施'
+CLOSE = '收盘价'
+
+BOUNS = '送股(股)'
+GIFT = '转增(股)'
+DONATION = '派息(税前)(元)'
+
+XDR_COLS = [BOUNS, GIFT, DONATION, '进度']
+PRICE_COLS = ['开盘价', '最高价', '收盘价', '最低价']
 
 CN     = 'cn'
 INFO   = 'info'
@@ -123,6 +133,9 @@ class cn_reader(_base_reader):
             file to be built, default is cn_database.h5
         update: boolean
             do full-update first
+        xdr: {str} or None
+            xdr mode, support: ['fill'] or None. given None will return
+            the original daily only 
         -------------
         database file has three Dataframe, as below
         Dataframe info:
@@ -144,6 +157,9 @@ class cn_reader(_base_reader):
         # XXX: auto detect file extension
         _info = self._read_info()
         _info.to_hdf(file, key=INFO, mode='w')
+
+        _daily = self._read_daily(xdr=kwargs.pop('xdr', None))
+        _daily.to_hdf(file, key=DAILY, mode='a')
 
         _report = self._read_reports()
         _report.to_hdf(file, key=REPORT, mode='a')
@@ -175,6 +191,34 @@ class cn_reader(_base_reader):
             return True
 
         return False
+
+    def _wrapper_read_html(self, url, encoding='gb2312', log='err', **kwargs):
+        '''
+        wrapper for pd.read_html(), and log if exception catched
+        @params:
+        url: {str}
+            url to read
+        encoding: {str}
+            encoding for request
+        log: {str}
+            log filename
+        kwargs:
+            see pd_read_html
+        '''
+        (text, raw) = _endless_get(url, None, encoding)
+        try:
+            df = pd.read_html(text, **kwargs)
+        except ValueError:
+            # tempz
+            if not os.path.exists('log'):
+                os.mkdir('log')
+            _log = os.path.join('log', log)
+            with open(_log, encoding=self._encoding, mode='w') as f:
+                f.write(text)
+
+            return None
+
+        return df
 
     def _read_symbols(self, symbols=None):
         '''
@@ -247,7 +291,7 @@ class cn_reader(_base_reader):
         old = None
         if force != True:
             try:
-                old = self._read_one_daily(symbol)
+                old = self._read_one_daily(symbol, xdr=None)
             except OSError:
                 pass
 
@@ -293,17 +337,10 @@ class cn_reader(_base_reader):
         for (y, s) in __date_range(start=start, end=today):
             url = URL_DAILY_T % (symbol, y, s)
 
-            (text, raw) = _endless_get(url, None, 'gb2312')
-            try:
-                season = pd.read_html(text, match=DAILY_TAB_MATCH, header=0, 
-                                      index_col=0, skiprows=1, parse_dates=True)
-            except ValueError:
-                # tempz
-                if not os.path.exists('log'):
-                    os.mkdir('log')
-                _log = os.path.join('log', 'daily_%s_%d_%d.log' % (symbol, y, s))
-                with open(_log, encoding=self._encoding, mode='w') as f:
-                    f.write(text)
+            season = self._wrapper_read_html(url, log='daily_%s_%d_%d.log' % (symbol, y, s), \
+                                             match=DAILY_TAB_MATCH, header=0, \
+                                             index_col=0, skiprows=1, parse_dates=True)
+            if season is None:
                 continue
 
             tables.append(season[0])
@@ -313,6 +350,28 @@ class cn_reader(_base_reader):
         new = pd.concat(tables).drop_duplicates()
         new.sort_index(ascending=False, inplace=True) # descending for easy-reading
         new.to_csv(file, sep=',', encoding=self._encoding)
+
+        # xdr
+        xdr = self._wrapper_read_html(URL_XDR_T % symbol, log='xdr_%s_%d.log' % (symbol, y), \
+                                      header=2, index_col=5, \
+                                      attrs={'id': 'sharebonus_1'}, parse_dates=True)[0]
+
+        if xdr is None:
+            raise OSError('%s: request xdr failed' % symbol)
+
+        xdr = xdr.iloc[slice(None), 1:5]
+        xdr.columns = XDR_COLS
+
+        try:
+            xdr = xdr[xdr[PLANE] == CARRIED]
+        except TypeError:
+            # xdr is possibly only one invalid line
+            pass
+
+        xdr.sort_index(ascending=False, inplace=True) # descending for easy-reading
+        file = os.path.join(self._path[DAILY], symbol, 'xdr.csv')
+
+        xdr.iloc[slice(None), 0:3].to_csv(file, sep=',', encoding=self._encoding)
 
     def _cache_url_report(self, symbol):
         '''
@@ -374,7 +433,7 @@ class cn_reader(_base_reader):
 
         return t
 
-    def _read_daily(self, category='daily'):
+    def _read_daily(self, xdr=None):
         '''
         read daily Dataframe
         the output Dataframe:
@@ -382,12 +441,13 @@ class cn_reader(_base_reader):
             symbols date(datetime)
             000001  1991-01-01
         @params:
-        category: {str: 'daily', 'xdr' or 'all'}
-            category to read, only support 'daily' now
+        xdr: {str} or None
+            xdr mode, support: ['fill'] or None. given None will return
+            the original daily only 
         '''
         tables = []
         for s in self._symbols:
-            t = self._read_one_daily(s)
+            t = self._read_one_daily(s, xdr=xdr)
             tables.append((t, s))
 
         all_daily = pd.concat([_[0] for _ in tables], keys=[_[1] for _ in tables], \
@@ -414,7 +474,7 @@ class cn_reader(_base_reader):
 
         return all_reports
 
-    def _read_one_daily(self, symbol, category='daily'):
+    def _read_one_daily(self, symbol, xdr=None):
         '''
         read-in one daily, in *ascending*
         the output Dataframe:
@@ -424,12 +484,10 @@ class cn_reader(_base_reader):
         @params:
         symbol: {str}
             symbol to read        
-        category: {str: 'daily', 'xdr' or 'all'}
-            category to read, only support 'daily' now
+        xdr: {str} or None
+            xdr mode, support: ['fill'] or None. given None will return
+            the original daily only 
         '''
-        if category != 'daily':
-            raise NotImplementedError('%s is not supported' % category)
-
         file = os.path.join(self._path[DAILY], symbol, 'daily.csv')
 
         if not os.path.exists(file):
@@ -440,6 +498,38 @@ class cn_reader(_base_reader):
                             parse_dates=True, encoding=self._encoding)
         daily.sort_index(inplace=True)
 
+        # xdr things
+        if xdr is not None:
+            if not xdr in ['fill']:
+                raise NotImplementedError('%s is not supported' % xdr)
+
+            file = os.path.join(self._path[DAILY], symbol, 'xdr.csv')
+
+            # FIXME: warning instead?
+            if not os.path.exists(file):
+                raise OSError('xdr file %s does not exist' % file)
+
+            xdr_df = pd.read_csv(file, header=0, index_col=0,
+                                 parse_dates=True, encoding=self._encoding)
+            xdr_df.sort_index(inplace=True)
+            xdr_df.dropna(how='all', inplace=True)
+
+            # concat to append xdr dates
+            daily = pd.concat([daily, xdr_df], axis=1)
+
+            s = None
+            for e in list(xdr_df.index.values):
+
+                _bouns = xdr_df.loc[e, BOUNS] / 10
+                _gift  = xdr_df.loc[e, GIFT] / 10
+                _dona  = xdr_df.loc[e, DONATION] / 10
+
+                if np.isnan(daily.loc[e, CLOSE]):
+                    daily.loc[e, PRICE_COLS] = daily.shift(1).loc[e, PRICE_COLS]
+                    daily.loc[e, PRICE_COLS] = daily.loc[e, PRICE_COLS].apply(lambda x: (x - _dona) / (1 + _gift + _bouns))
+
+                s = e
+                
         return daily
 
     def _read_one_report(self, symbol):
