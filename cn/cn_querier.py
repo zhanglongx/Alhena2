@@ -1,6 +1,7 @@
 # -*- coding=utf-8 -*-
 
 import os, re
+import json
 import pandas as pd
 
 from _base_querier import (_base_report)
@@ -16,6 +17,8 @@ TABLE_TYPE = 'table_type'
 SUBJECTS   = 'subjects'
 DATE       = 'date'
 PROFIT_TAB = 'ProfitStatement'
+
+LANGUAGE_FILE = '../extra/querier_en.json'
 
 class cn_report(_base_report):
     def __init__(self, path, symbols, start=None, end=None, **kwargs):
@@ -67,12 +70,25 @@ class cn_report(_base_report):
 
         self._report = pd.concat([_daily, _report], axis=1)
 
+        if kwargs.pop('language', 'CN') == 'EN':
+            _language = os.path.join(self._root, LANGUAGE_FILE)
+            if not os.path.exists(_language):
+                raise OSError('%s not found' % _language)
+
+            with open(_language) as f:
+                _lang_dict = json.load(f)
+
+            self._report = self._formula(formulas=_lang_dict)
+        else:
+            # warning?
+            pass
+
     def get(self, formulas=None, **kwargs):
         '''
         get calculated Dataframe
         @params:
-        formulas: {dict, list[str], str}
-            column calculate formula
+        formulas: {dict, list[str], str, None}
+            column calculate formula, None for whole and no calculating
         mode: {str}
             additional mode 
         '''
@@ -107,7 +123,7 @@ class cn_report(_base_report):
         '''
         _report = pd.read_hdf(self._database, REPORT)
 
-        # XXX: re-sample, fill with full-Q, must run before other operations
+        # XXX: re-sample, fill with full-Q, *MUST* run before other operations
         def _resampler(x):
             return x.set_index(DATE).resample('Q').last()
 
@@ -157,10 +173,12 @@ class cn_report(_base_report):
         '''
         calculate a report Dataframe based on formulas
         @params:
-        formulas: {dict, list[str], str}
-            column calculate formula
+        formulas: {dict, list[str], str, None}
+            column calculate formula, None for whole and no calculating
         '''
-        if isinstance(formulas, (str, list)):
+        if formulas is None:
+            return self._report
+        elif isinstance(formulas, (str, list)):
             # nothing to calculate
             return self._report[_formulas]
         elif isinstance(formulas, dict):

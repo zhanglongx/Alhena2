@@ -16,8 +16,10 @@ def main():
     _path    = parser.parse_args().path
     _symbols = parser.parse_args().symbols
 
-    report = cn_report(path=_path, symbols=_symbols, start=None, TTM=False, quarter=None)
-    df = report.get(formulas={'profit': '五、净利润'})
+    report = cn_report(path=_path, symbols=_symbols, start=None, TTM=False, quarter=None, \
+                       language='EN')
+    # df = report.get(formulas={'profit': 'profit_a'})
+    df = report.get(formulas=None)
 
     df.to_csv('t.csv')
 
