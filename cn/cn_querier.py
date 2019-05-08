@@ -92,7 +92,7 @@ class cn_report(_base_report):
         '''
         load daily from database.
         '''
-        # XXX: *MUST* be load from reader HDF, with 'fill'
+        # XXX: *MUST* be load from reader HDF, with xdr='fill'
         _daily = pd.read_hdf(self._database, DAILY)
 
         _daily = _daily.groupby([SYMBOLS, self._quarter_grp]).last()
@@ -103,7 +103,7 @@ class cn_report(_base_report):
 
     def _load_report(self):
         '''
-        load report from database
+        load report from database, and filled with full-Q
         '''
         _report = pd.read_hdf(self._database, REPORT)
 

@@ -3,9 +3,9 @@
 VERBOSE?=@
 
 ALHENA2:=.
-CACHE_H5_CN:=$(ALHENA2)/all_cn.h5
-CACHE_DAILY_CN:=$(wildcard $(ALHENA2)/database/cn/daily/*.csv)
-CACHE_REPORT_CN:=$(wildcard $(ALHENA2)/database/cn/report/*.csv)
+CACHE_H5_CN:=$(ALHENA2)/database/cn/cn_database.h5
+CACHE_DAILY_CN:=$(wildcard $(ALHENA2)/database/cn/daily/*/*.csv)
+CACHE_REPORT_CN:=$(wildcard $(ALHENA2)/database/cn/report/*/*.csv)
 __DAILY_TAR:=database.tar.xz
 
 .PHONY : help update h5 clean
@@ -21,10 +21,10 @@ help:
 update:
 	$(VERBOSE) python3 ./reader.py update
 
-h5: $(CACHE_H5_CN)
+build: $(CACHE_H5_CN)
 
 $(CACHE_H5_CN): $(CACHE_DAILY_CN) $(CACHE_REPORT_CN)
-	$(VERBOSE) python3 ./reader.py -s cn -f $@ build
+	$(VERBOSE) python3 ./reader.py -f $@ build
 
 $(__DAILY_TAR):
 	$(VERBOSE) ssh Bandwagon2 "cd ~/Workdir/Alhena && ./utilities/tar_database.sh"
