@@ -296,7 +296,7 @@ class cn_reader(_base_reader):
                 pass
 
         def __season(m):
-            if not m in range(1, 12):
+            if not m in range(1, 13):
                 raise ValueError('m: %d is not valid' % m)
             return (m-1) // 3 + 1
 
