@@ -16,6 +16,9 @@ def main():
     _path    = parser.parse_args().path
     _symbols = parser.parse_args().symbols
 
+    if len(_symbols) == 0:
+        _symbols = None
+
     report = cn_report(path=_path, symbols=_symbols, start=None, TTM=False, quarter=None, \
                        language='EN')
     # df = report.get(formulas={'profit': 'profit_a'})

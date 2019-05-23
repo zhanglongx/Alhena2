@@ -100,6 +100,10 @@ class cn_report(_base_report):
         '''
         _info = pd.read_hdf(self._database, INFO)
 
+        if self._symbols is None:
+            self._symbols = list(_info.index)
+            return
+
         # FIXME: warning?
         _symbols = [str(s) for s in self._symbols if str(s) in _info.index.values]
         self._symbols = _symbols
