@@ -1,6 +1,6 @@
 # coding: utf-8
 
-import os, time, datetime, io, sys
+import os, io, time, datetime, io, sys
 import re
 import bs4
 import numpy as np
@@ -514,6 +514,20 @@ class cn_reader(_base_reader):
                                  parse_dates=True, encoding=self._encoding)
             xdr_df.sort_index(inplace=True)
 
+            if xdr_df.loc[xdr_df.index.duplicated(keep=False)].empty == False:
+                first = xdr_df.loc[xdr_df.index.duplicated(keep='first')]
+                last  = xdr_df.loc[xdr_df.index.duplicated(keep='last')]
+
+                dup = first + last
+
+                xdr_df.loc[dup.index] = dup
+
+                xdr_df = xdr_df.loc[~xdr_df.index.duplicated(keep='first')]
+
+            # XXX: workaround for non-date index
+            xdr_df.index = pd.to_datetime(xdr_df.index, errors='coerce')
+            xdr_df = xdr_df.loc[xdr_df.index.dropna()]
+
             # concat to append xdr dates
             daily = pd.concat([daily, xdr_df], axis=1)
 
@@ -552,8 +566,19 @@ class cn_reader(_base_reader):
             if not os.path.exists(file):
                 raise OSError('report file: %s not exists' % file)
 
+            def __sanitize(lines):
+
+                # FIXME: workaround for 002886: '20141231.1',
+                #        use dot version?
+                r = re.compile(r'^(\d+)\.\d+,')
+
+                return [l for l in lines if not r.match(l)]
+
+            all_lines = __sanitize(_read_buffer(file=file, encoding=self._encoding))
+
             # FIXME: integrated
-            t = pd.read_csv(file, header=0, index_col=0, parse_dates=True, encoding=self._encoding)\
+            t = pd.read_csv(io.StringIO(''.join(all_lines)), \
+                            header=0, index_col=0, parse_dates=True, encoding=self._encoding)
 
             tables.append((t, table_type))
 
