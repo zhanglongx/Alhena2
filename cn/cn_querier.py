@@ -113,11 +113,11 @@ class cn_report(_base_report):
         load daily from database.
         '''
         # XXX: *MUST* be load from reader HDF, with xdr='fill'
-        _daily = pd.read_hdf(self._database, DAILY)
+        _daily = pd.read_hdf(self._database, DAILY).loc[(self._symbols, slice(None))]
 
         _daily = _daily.groupby([SYMBOLS, self._quarter_grp]).last()
 
-        _daily = _daily.loc[(self._symbols, slice(self._start, self._end)), :]
+        _daily = _daily.loc[(slice(None), slice(self._start, self._end)), :]
 
         return _daily
 
@@ -125,7 +125,7 @@ class cn_report(_base_report):
         '''
         load report from database, and filled with full-Q
         '''
-        _report = pd.read_hdf(self._database, REPORT)
+        _report = pd.read_hdf(self._database, REPORT).loc[(self._symbols, slice(None))]
 
         # XXX: re-sample, fill with full-Q, *MUST* run before other operations
         def _resampler(x):
@@ -138,10 +138,16 @@ class cn_report(_base_report):
 
         _report = _report.groupby([SYMBOLS, self._quarter_grp]).last()
 
-        _report = _report.loc[(self._symbols, slice(self._start, self._end)), :]
+        _report = _report.loc[(slice(None), slice(self._start, self._end)), :]
 
         # FIXME: level 0 is only for TTM now, so drop it for more simple calculating
         _report.columns = _report.columns.droplevel(0)
+
+        # workaround for ()
+        def __remove_brackets(s):
+            return s.replace('(', '（').replace(')', '）')
+
+        _report.rename(mapper=__remove_brackets, axis=1, inplace=True)
 
         return _report
 
@@ -184,7 +190,7 @@ class cn_report(_base_report):
             return self._report
         elif isinstance(formulas, (str, list)):
             # nothing to calculate
-            return self._report[_formulas]
+            return self._report[formulas]
         elif isinstance(formulas, dict):
             pass
         else:
