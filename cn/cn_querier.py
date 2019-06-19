@@ -4,7 +4,8 @@ import os, re
 import json
 import pandas as pd
 
-from _base_querier import (_base_report)
+from _base_querier import (_base_querier)
+from _utils import (_sanitize_dates)
 from _const import (DATABASE_DIRNAME, DATABASE_FILENAME, COL_CLOSE)
 
 CN     = 'cn'
@@ -20,8 +21,8 @@ PROFIT_TAB = 'ProfitStatement'
 
 LANGUAGE_FILE = '../extra/querier_en.json'
 
-class cn_report(_base_report):
-    def __init__(self, path, symbols, start=None, end=None, **kwargs):
+class cn_report(_base_querier):
+    def __init__(self, path, **kwargs):
         '''
         @params
         path: {str}
@@ -42,7 +43,13 @@ class cn_report(_base_report):
         language: {str}, one of ['CN', 'EN']
             column name language
         '''
-        super().__init__(path=path, symbols=symbols, start=start, end=end, **kwargs)
+        super().__init__(path=path, **kwargs)
+
+        self._symbols = kwargs.pop('symbols', None)
+
+        (start, end) = _sanitize_dates(kwargs.pop('start', '2007-01-01'), kwargs.pop('end', None))
+        self._start = start
+        self._end   = end
 
         if isinstance(self._symbols, (str, int)):
             self._symbols = [self._symbols]
@@ -83,7 +90,7 @@ class cn_report(_base_report):
             # warning?
             pass
 
-    def get(self, formulas=None, **kwargs):
+    def get(self, **kwargs):
         '''
         get calculated Dataframe
         @params:
@@ -92,6 +99,8 @@ class cn_report(_base_report):
         mode: {str}
             additional mode 
         '''
+        formulas = kwargs.pop('formulas', None)
+
         return self._formula(formulas=formulas)
 
     def _load_symbols(self):
