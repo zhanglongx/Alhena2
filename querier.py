@@ -4,7 +4,7 @@ import os
 import json
 import argparse
 
-from cn.cn_querier import (cn_report)
+from cn.cn_querier import (cn_info, cn_report)
 
 def main():
     parser = argparse.ArgumentParser(description='''wrapper for Alhena2 querier''')
@@ -28,6 +28,12 @@ def main():
 
     if len(_symbols) == 0:
         _symbols = None
+    elif len(_symbols) == 1:
+        _symbols = _symbols[0]
+    else:
+        pass
+
+    _symbols = cn_info(path=_path).get(key=_symbols)
 
     report = cn_report(path=_path, symbols=_symbols, start=_start, TTM=_TTM, quarter=None, \
                        language='CN')

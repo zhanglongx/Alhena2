@@ -19,7 +19,61 @@ SUBJECTS   = 'subjects'
 DATE       = 'date'
 PROFIT_TAB = 'ProfitStatement'
 
+NAME     = 'name'
+INDUSTRY = 'industry'
+EXCHANGE = 'exchange'
+
 LANGUAGE_FILE = '../extra/querier_en.json'
+
+class cn_info(_base_querier):
+    def __init__(self, path, **kwargs):
+        super().__init__(path=path, **kwargs)
+
+        self._database = os.path.join(self._root, CN, DATABASE_FILENAME)
+        self._info = self._load_info()
+
+    def get(self, **kwargs):
+        '''
+        get symbols based on key
+        @params
+        key: {str}
+            query 'symbols', 'name', 'industry', 'exchange' on key
+        '''
+        _key = kwargs.pop('key', None)
+
+        _idx = self._info.index
+
+        if not _key is None:
+            _reset_idx_info = self._info.reset_index()
+
+            if isinstance(_key, int):
+                _key = str(_key)
+            elif isinstance(_key, str):
+                pass
+            else:
+                raise TypeError('_key type is not supported')
+
+            for k in [SYMBOLS, NAME, INDUSTRY, EXCHANGE]:
+                if _key in list(_reset_idx_info[k]):
+                    _idx = _reset_idx_info[_reset_idx_info[k] == _key][SYMBOLS]
+
+        return list(_idx)
+
+    def _load_info(self):
+        '''
+        load info from database
+        '''
+        _info = pd.read_hdf(self._database, INFO)
+
+        _i_idx = _info.index.astype(int)
+
+        # supplement for exchange
+        _info[EXCHANGE] = 'SZ.A'
+        _info.loc[_i_idx < 300000, EXCHANGE] = 'SZ'
+        _info.loc[600000 <= _i_idx, EXCHANGE] = 'SH'
+        _info.loc[688000 <= _i_idx, EXCHANGE] = 'SH.A'
+
+        return _info
 
 class cn_report(_base_querier):
     def __init__(self, path, **kwargs):
