@@ -40,15 +40,15 @@ def main():
                        language='CN')
     df = report.get(formulas=_formula)
 
-    if len(df.index.levels[0]) == 1 and _drop:
-        df.index = df.index.droplevel(0)
-
     def __PEG(df):
         df['p_pct'] = df.groupby(level=0)['profit'].apply(lambda x: x.pct_change())
         df.loc[df['p_pct'] < 0, 'p_pct'] = np.NaN
-        df['PEG'] = df['PE'] / df['p_pct']
+        df['PEG'] = df['PE'] / (df['p_pct'] * 100)
 
     __PEG(df)
+
+    if len(df.index.levels[0]) == 1 and _drop:
+        df.index = df.index.droplevel(0)
 
     df.to_csv('t.csv')
 
