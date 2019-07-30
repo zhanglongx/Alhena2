@@ -83,7 +83,7 @@ class cn_report(_base_querier):
             Alhena2 path
         symbols : {List[str], None}
             String symbol of like of symbols
-        start: string, (defaults to '1/1/2007')
+        start: string, (defaults to None)
             Starting date, timestamp. Parses many different kind of date
             representations (e.g., 'JAN-01-2010', '1/1/10', 'Jan, 1, 1980')
         end: string, (defaults to today)
@@ -101,7 +101,7 @@ class cn_report(_base_querier):
 
         self._symbols = kwargs.pop('symbols', None)
 
-        (start, end) = _sanitize_dates(kwargs.pop('start', '2007-01-01'), kwargs.pop('end', None))
+        (start, end) = _sanitize_dates(kwargs.pop('start', None), kwargs.pop('end', None))
         self._start = start
         self._end   = end
 
