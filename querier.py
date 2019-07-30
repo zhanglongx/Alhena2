@@ -4,6 +4,7 @@ import os
 import json
 import argparse
 import numpy as np
+import pandas as pd
 
 import matplotlib.pyplot as plt
 
@@ -21,6 +22,9 @@ def main():
     parser.add_argument('-s', '--start', default='2000-01-01', type=str, help='start date')
     parser.add_argument('--disable-TTM', dest='TTM', default=True, action='store_false', help='TTM off')
     parser.add_argument('key', default=None, type=str, nargs='?', help='key to extract')
+
+    # runtime
+    pd.set_option('display.max_columns', None)
 
     _drop    = parser.parse_args().drop
     _formula = parser.parse_args().formula
