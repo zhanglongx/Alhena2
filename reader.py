@@ -85,8 +85,7 @@ class cn(_base):
     def __init__(self, path):
         super().__init__(path)
 
-        # self._reader = cn_reader(path, symbols='000001') # tempz
-        self._reader = cn_reader(path, symbols=None) # tempz
+        self._reader = cn_reader(path, symbols=None)
 
     def update(self):
         if not super().update() is True:
