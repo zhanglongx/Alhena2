@@ -8,7 +8,7 @@ CACHE_DAILY_CN:=$(wildcard $(ALHENA2)/database/cn/daily/*/*.csv)
 CACHE_REPORT_CN:=$(wildcard $(ALHENA2)/database/cn/report/*/*.csv)
 __DAILY_TAR:=database.tar.xz
 
-.PHONY : help update h5 clean
+.PHONY : help update build clean
 
 help:
 	$(VERBOSE) echo "Alhena2: "
