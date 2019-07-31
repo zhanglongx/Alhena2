@@ -45,9 +45,8 @@ def main():
     df = report.get(formulas=_formula)
 
     def __PEG(df):
-        df['p_pct'] = df.groupby(level=0)['profit'].apply(lambda x: x.pct_change())
-        df.loc[df['p_pct'] < 0, 'p_pct'] = np.NaN
-        df['PEG'] = df['PE'] / (df['p_pct'] * 100)
+        df.loc[df['profit%'] < 0, 'profit%'] = np.NaN
+        df['PEG'] = df['PE'] / (df['profit%'] * 100)
 
     __PEG(df)
 

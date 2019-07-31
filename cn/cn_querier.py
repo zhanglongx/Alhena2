@@ -155,7 +155,7 @@ class cn_report(_base_querier):
         '''
         formulas = kwargs.pop('formulas', None)
 
-        return self._formula(formulas=formulas)
+        return self._formula(formulas=formulas).copy()
 
     def _load_symbols(self):
         '''
@@ -272,6 +272,12 @@ class cn_report(_base_querier):
             return _report
 
         for f in formulas.keys():
-            __caculate(f, formulas[f])
+            _ = re.match(r'(.*)%', f)
+            if _:
+                f = _[1]
+                __caculate(f, formulas[_[0]])
+                _report[_[0]] = _report[f].groupby(level=0).apply(lambda x: x.pct_change())
+            else:
+                __caculate(f, formulas[f])
 
         return _report[list(formulas.keys())]
