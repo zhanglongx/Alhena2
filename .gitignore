@@ -10,8 +10,9 @@ log/
 *.pyproj
 *.user
 
-*.h5
+*.npy
 *.tar.xz
+*.zip
 t.csv
 
 checkpoints/
