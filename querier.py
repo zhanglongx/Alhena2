@@ -15,6 +15,7 @@ def main():
 
     parser.add_argument('-c', '--csv', dest='csv', action='store_true', help='csv output')
     parser.add_argument('-d', '--drop', dest='drop', action='store_true', help='drop symbol if only one')
+    parser.add_argument('-e', '--en', action='store_true', default=False, help='turn language en on')
     parser.add_argument('-f', '--formula', type=str, nargs='?', help='formula or file input (.json)')
     parser.add_argument('-p', '--path', default='.', type=str, nargs='?', help='Alhena2 path')
     parser.add_argument('-q', '--quarter', default=None, type=str, nargs='?', \
@@ -27,6 +28,7 @@ def main():
     pd.set_option('display.max_columns', None)
 
     _drop    = parser.parse_args().drop
+    _en      = parser.parse_args().en
     _formula = parser.parse_args().formula
     _path    = parser.parse_args().path
     _quarter = parser.parse_args().quarter
@@ -38,15 +40,20 @@ def main():
         with open(_formula, encoding='utf-8') as f:
             _formula = json.load(f)
 
+    language = 'CN' if not _en else 'EN'
+
     _symbols = cn_info(path=_path).get(key=_key)
 
     report = cn_report(path=_path, symbols=_symbols, start=_start, TTM=_TTM, quarter=_quarter, \
-                       language='CN')
+                       language=language)
     df = report.get(formulas=_formula)
 
     def __PEG(df):
-        df.loc[df['profit%'] < 0, 'profit%'] = np.NaN
-        df['PEG'] = df['PE'] / (df['profit%'] * 100)
+        try: 
+            df.loc[df['profit%'] < 0, 'profit%'] = np.NaN
+            df['PEG'] = df['PE'] / (df['profit%'] * 100)
+        except:
+            pass
 
     __PEG(df)
 
