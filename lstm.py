@@ -5,6 +5,15 @@ import json
 import argparse as arg
 import numpy as np
 import pandas as pd
+
+from sklearn.preprocessing import scale
+
+import keras
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Flatten, Reshape, GlobalAveragePooling1D
+from keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM
+from keras.utils import np_utils
+
 from cn.cn_querier import (cn_info, cn_report)
 
 LSTM_X_FILE = 'lstm.x.npy'
@@ -37,10 +46,13 @@ class data_set():
         bins: {int}
             bins to split label Y
         '''
+        self._win = kwargs.pop('win', 10) 
+
         self.use_cache = False
         if use_cache and \
            os.path.exists(LSTM_X_FILE) and os.path.exists(LSTM_Y_FILE):
 
+            print('Using cache: %s, %s' % (LSTM_X_FILE, LSTM_Y_FILE))
             self.use_cache = True
             return 
 
@@ -49,26 +61,41 @@ class data_set():
         self._keys = keys
 
         self._symbols = cn_info(path=_path).get(key=category)
+
         _report  = cn_report(path=_path, symbols=self._symbols, start=start, end=end, \
-                             TTM=True, quarter=None, language='EN')
-
+                             TTM=True, quarter=None, language='CN')
         self._report = _report.get(formulas=self._keys)
-
-        self._win = kwargs.pop('win', 10) 
 
         bins = kwargs.pop('bins', 16)
         self._percent = self.__percent(bins=bins)
+        self._report.drop(labels=AMOUNT, axis=1, inplace=True)
 
     def load(self):
+        '''
+        load data set cache if use_cache on, or gen new
+        '''
         if self.use_cache:
-            return (np.load(LSTM_X_FILE), np.load(LSTM_Y_FILE))
+            (x, y) = (np.load(LSTM_X_FILE), np.load(LSTM_Y_FILE))
+            print('x y shape:')
+            print(x.shape)
+            print(y.shape)
+        else:
+            (x, y) = self.__gen(win=self._win)
 
-        (x, y) = self.__gen(win=self._win)
+            np.save(LSTM_X_FILE, x)
+            np.save(LSTM_Y_FILE, y)
 
-        np.save(LSTM_X_FILE, x)
-        np.save(LSTM_Y_FILE, y)
+        self.x = x
+        self.y = y
 
-        return (x, y)
+    def processing(self):
+        '''
+        processing data set
+        '''
+        self.__normalized_x()
+        self.__onehot()
+
+        return (self.x, self.y)
 
     def __gen(self, win=10):
         '''
@@ -81,7 +108,9 @@ class data_set():
 
         def __symbols(x):
             # rolling window
-            arr = [x.shift(s).values[-win::1][:win] for s in range(len(x))[::-1]]
+            arr = np.array([x.shift(s).values[-win::1][:win] for s in range(len(x))[::-1]])
+            arr[np.isinf(arr)]   = np.NaN
+            arr[np.isneginf(arr)] = np.NaN
 
             s = x.index[0][0]
 
@@ -130,6 +159,60 @@ class data_set():
 
         return total[LABEL]
 
+    def __normalized_x(self):
+        (batches, _, features) = self.x.shape
+
+        s = scale(self.x.reshape(batches * self._win, features))
+
+        self.x = s.reshape(batches, self._win, features)
+
+    def __onehot(self):
+        self.y = np_utils.to_categorical(self.y)
+
+class model():
+    def __init__(self, input_shape, num_classes, batches=100, epochs=50, split=0.2, verbose=1):
+
+        self._batches = batches
+        self._epochs  = epochs
+        self._split   = split
+        self._verbose = verbose
+
+        # FIXME: add timesteps check
+        _model = Sequential()
+        _model.add(Conv1D(100, 2, activation='relu', input_shape=input_shape))
+        _model.add(Conv1D(300, 2, activation='relu'))
+        _model.add(MaxPooling1D(3))
+        _model.add(LSTM(200, return_sequences=True))
+        _model.add(LSTM(200, return_sequences=True))
+        _model.add(GlobalAveragePooling1D())
+        _model.add(Dropout(0.5))
+        _model.add(Dense(num_classes, activation='softmax'))
+
+        _model.compile(loss='categorical_crossentropy',
+                       optimizer='adam', metrics=['accuracy'])
+
+        if self._verbose:
+            print(_model.summary())
+
+        self._model = _model
+
+    def fit(self, x, y):
+        # cb_list = [keras.callbacks.ModelCheckpoint(
+        #                 filepath='best_model.{epoch:02d}-{val_loss:.2f}.h5',
+        #                 monitor='val_loss', save_best_only=True),
+        #             keras.callbacks.EarlyStopping(monitor='acc', patience=10)]
+
+        cb_list = [keras.callbacks.ModelCheckpoint(
+                        filepath='best_model.{epoch:02d}-{val_loss:.2f}.h5',
+                        monitor='val_loss', save_best_only=True)]
+
+        self._model.fit(x, y, \
+                        batch_size=self._batches,
+                        epochs=self._epochs,
+                        callbacks=cb_list,
+                        validation_split=self._split,
+                        verbose=self._verbose)
+
 def main():
     parser = arg.ArgumentParser(description='''LSTM under Alhena2''')
 
@@ -143,9 +226,15 @@ def main():
     with open(_formula, encoding='utf-8') as f:
         _formula = json.load(f)
 
-    (x, y) = data_set(keys=_formula, category=_category).load()
+    ds = data_set(keys=_formula, category=_category)
+    ds.load()
 
-    return x
+    (x, y) = ds.processing()
+
+    m = model((x.shape[1], x.shape[2]), y.shape[1])
+    m.fit(x, y)
+
+    return ds
 
 if __name__ == '__main__':
     main()
