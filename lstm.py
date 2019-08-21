@@ -16,8 +16,7 @@ from keras.utils import np_utils
 
 from cn.cn_querier import (cn_info, cn_report)
 
-LSTM_X_FILE = 'lstm.x.npy'
-LSTM_Y_FILE = 'lstm.y.npy'
+LSTM_FILE = 'lstm.h5'
 
 AMOUNT = 'amount'
 CLOSE = 'close'
@@ -46,44 +45,38 @@ class data_set():
         bins: {int}
             bins to split label Y
         '''
-        self._win = kwargs.pop('win', 10) 
+        if use_cache and os.path.exists(LSTM_FILE):
+            print('Using cache: %s' % LSTM_FILE)
 
-        self.use_cache = False
-        if use_cache and \
-           os.path.exists(LSTM_X_FILE) and os.path.exists(LSTM_Y_FILE):
+            self._symbols = pd.read_hdf(LSTM_FILE, key='symbols')
+            self._report  = pd.read_hdf(LSTM_FILE, key='report')
+        else:
+            _path = '.'
 
-            print('Using cache: %s, %s' % (LSTM_X_FILE, LSTM_Y_FILE))
-            self.use_cache = True
-            return 
+            self._keys = keys
 
-        _path = '.'
+            self._symbols = cn_info(path=_path).get(key=category)
 
-        self._keys = keys
+            _report  = cn_report(path=_path, symbols=self._symbols, start=start, end=end, \
+                                 TTM=True, quarter=None, language='CN')
+            self._report = _report.get(formulas=self._keys)
 
-        self._symbols = cn_info(path=_path).get(key=category)
+            self._symbols = pd.DataFrame(self._symbols)
 
-        _report  = cn_report(path=_path, symbols=self._symbols, start=start, end=end, \
-                             TTM=True, quarter=None, language='CN')
-        self._report = _report.get(formulas=self._keys)
+            self._symbols.to_hdf(LSTM_FILE, key='symbols', mode='w')
+            self._report.to_hdf(LSTM_FILE, key='report', mode='a')
 
-        bins = kwargs.pop('bins', 16)
+        self._win = kwargs.pop('win', 20) 
+
+        bins = kwargs.pop('bins', 2)
         self._percent = self.__percent(bins=bins)
         self._report.drop(labels=AMOUNT, axis=1, inplace=True)
 
     def load(self):
         '''
-        load data set cache if use_cache on, or gen new
+        load data
         '''
-        if self.use_cache:
-            (x, y) = (np.load(LSTM_X_FILE), np.load(LSTM_Y_FILE))
-            print('x y shape:')
-            print(x.shape)
-            print(y.shape)
-        else:
-            (x, y) = self.__gen(win=self._win)
-
-            np.save(LSTM_X_FILE, x)
-            np.save(LSTM_Y_FILE, y)
+        (x, y) = self.__gen(win=self._win)
 
         self.x = x
         self.y = y
@@ -142,20 +135,30 @@ class data_set():
             return x[AMOUNT].iloc[-1] / x[AMOUNT].iloc[0]
 
         total[PERCENT] = _report.groupby(level=0).apply(__total)
-        total.dropna(how='any', inplace=True)
 
-        _, bins = np.histogram(total, bins=bins)
+        # set NaN as zero
+        total.replace({np.NaN: 0.0}, inplace=True)
 
-        def __bins(x):
-            for (i, b) in enumerate(bins[:-1]):
-                if x[PERCENT] >= b:
-                    r = i
-                else:
-                    break
+        total[LABEL] = total[PERCENT] > 4.00
+        total = total.applymap(lambda x: 1 if x == True else x)
+        total = total.applymap(lambda x: 0 if x == False else x)
 
-            return r
+        # scale to fit
+        # total[PERCENT] = QuantileTransformer().fit(total).transform(total)
+        # total.dropna(how='any', inplace=True)
 
-        total[LABEL] = total.apply(__bins, axis=1)
+        # _, bins = np.histogram(total, bins=bins)
+
+        # def __bins(x):
+        #     for (i, b) in enumerate(bins[:-1]):
+        #         if x[PERCENT] >= b:
+        #             r = i
+        #         else:
+        #             break
+
+        #     return r
+
+        # total[LABEL] = total.apply(__bins, axis=1)
 
         return total[LABEL]
 
@@ -170,7 +173,7 @@ class data_set():
         self.y = np_utils.to_categorical(self.y)
 
 class model():
-    def __init__(self, input_shape, num_classes, batches=100, epochs=50, split=0.2, verbose=1):
+    def __init__(self, input_shape, num_classes, batches=100, epochs=1000, split=0.2, verbose=1):
 
         self._batches = batches
         self._epochs  = epochs
@@ -226,7 +229,7 @@ def main():
     with open(_formula, encoding='utf-8') as f:
         _formula = json.load(f)
 
-    ds = data_set(keys=_formula, category=_category)
+    ds = data_set(_formula, category=_category)
     ds.load()
 
     (x, y) = ds.processing()
