@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import os
+import re
 import json
 import argparse
 import numpy as np
@@ -9,6 +10,22 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from cn.cn_querier import (cn_info, cn_report)
+
+def _sanitate_key(key):
+    if not isinstance(key, list):
+        raise KeyError
+
+    if len(key) == 1:
+        return key[0]
+
+    # first as symbols
+    _s = [k for k in key if re.match(r'\d+$', k)]
+
+    if len(_s) > 0:
+        return _s
+    else:
+        # TODO
+        raise ValueError('only symbols as list supported now')
 
 def main():
     parser = argparse.ArgumentParser(description='''wrapper for Alhena2 querier''')
@@ -22,7 +39,7 @@ def main():
                         help="quarter in ['Mar', 'Jun', 'Sep', 'Dec']")
     parser.add_argument('-s', '--start', default='2000-01-01', type=str, help='start date')
     parser.add_argument('--disable-TTM', dest='TTM', default=True, action='store_false', help='TTM off')
-    parser.add_argument('key', default=None, type=str, nargs='?', help='key to extract')
+    parser.add_argument('key', default=None, type=str, nargs='+', help='key to extract')
 
     # runtime
     pd.set_option('display.max_columns', None)
@@ -42,7 +59,12 @@ def main():
 
     language = 'CN' if not _en else 'EN'
 
-    _symbols = cn_info(path=_path).get(key=_key)
+    _key =_sanitate_key(_key) 
+
+    if isinstance(_key, str):
+        _symbols = cn_info(path=_path).get(key=_key)
+    else:
+        _symbols = _key
 
     report = cn_report(path=_path, symbols=_symbols, start=_start, TTM=_TTM, quarter=_quarter, \
                        language=language)
