@@ -3,10 +3,12 @@
 import os
 import json
 import argparse as arg
+import random
 import numpy as np
 import pandas as pd
 
 from sklearn.preprocessing import scale
+from sklearn.utils import shuffle
 
 import keras
 from keras.models import Sequential
@@ -25,6 +27,11 @@ PERCENT = 'percent'
 
 # mainly for debugging
 pd.set_option('display.max_columns', None)
+
+CLIP = 0.5
+WIN  = 20
+BINS = 2
+PERCENT_THR = 1.5
 
 class data_set():
     def __init__(self, keys, use_cache=True, category=None, start=None, end=None, **kwargs):
@@ -66,9 +73,9 @@ class data_set():
             self._symbols.to_hdf(LSTM_FILE, key='symbols', mode='w')
             self._report.to_hdf(LSTM_FILE, key='report', mode='a')
 
-        self._win = kwargs.pop('win', 20) 
+        self._win = kwargs.pop('win', WIN) 
 
-        bins = kwargs.pop('bins', 2)
+        bins = kwargs.pop('bins', BINS)
         self._percent = self.__percent(bins=bins)
         self._report.drop(labels=AMOUNT, axis=1, inplace=True)
 
@@ -88,9 +95,11 @@ class data_set():
         self.__normalized_x()
         self.__onehot()
 
-        return (self.x, self.y)
+        (self.x, self.y) = shuffle(self.x, self.y)
 
-    def __gen(self, win=10):
+        return (self.x, self.y, self.x[:50], self.y[:50])
+
+    def __gen(self, win=WIN):
         '''
         load (_x, _y) as _x: rolling window, _y labeled percent
         @param:
@@ -102,7 +111,7 @@ class data_set():
         def __symbols(x):
             # rolling window
             arr = np.array([x.shift(s).values[-win::1][:win] for s in range(len(x))[::-1]])
-            arr[np.isinf(arr)]   = np.NaN
+            arr[np.isinf(arr)]    = np.NaN
             arr[np.isneginf(arr)] = np.NaN
 
             s = x.index[0][0]
@@ -117,12 +126,28 @@ class data_set():
 
         return (np.array(_x), np.array(_y))
 
-    def __percent(self, bins=16):
+    def __gen_test(self, win=WIN):
+
+        x_list = list()
+        y_list = list()
+        for _ in range(10000):
+            v = random.randint(0, 1)
+
+            _x = [[random.randint(0, 3) * v] for _ in range(win)]
+            # _y = random.randint(0, 1)
+            _y = v
+
+            x_list.append(_x)
+            y_list.append(_y)
+
+        return (np.array(x_list), np.array(y_list))
+
+    def __percent(self, bins=BINS):
         '''
         return labeled Y, MAY DROP some original data
         @parmas
         bins: {int}
-            bins spitted with `bins`
+            bins split with `bins`
         '''
         _report = self._report.copy()
 
@@ -139,7 +164,7 @@ class data_set():
         # set NaN as zero
         total.replace({np.NaN: 0.0}, inplace=True)
 
-        total[LABEL] = total[PERCENT] > 4.00
+        total[LABEL] = total[PERCENT] > PERCENT_THR
         total = total.applymap(lambda x: 1 if x == True else x)
         total = total.applymap(lambda x: 0 if x == False else x)
 
@@ -165,6 +190,9 @@ class data_set():
     def __normalized_x(self):
         (batches, _, features) = self.x.shape
 
+        # tempz
+        self.x = np.clip(self.x, -1 * CLIP, CLIP)
+
         s = scale(self.x.reshape(batches * self._win, features))
 
         self.x = s.reshape(batches, self._win, features)
@@ -173,7 +201,7 @@ class data_set():
         self.y = np_utils.to_categorical(self.y)
 
 class model():
-    def __init__(self, input_shape, num_classes, batches=100, epochs=1000, split=0.2, verbose=1):
+    def __init__(self, input_shape, num_classes, batches=500, epochs=1000, split=0.2, verbose=2):
 
         self._batches = batches
         self._epochs  = epochs
@@ -182,11 +210,11 @@ class model():
 
         # FIXME: add timesteps check
         _model = Sequential()
-        _model.add(Conv1D(100, 2, activation='relu', input_shape=input_shape))
-        _model.add(Conv1D(300, 2, activation='relu'))
+        _model.add(Conv1D(50, 2, activation='relu', input_shape=input_shape))
+        _model.add(Conv1D(100, 2, activation='relu'))
         _model.add(MaxPooling1D(3))
-        _model.add(LSTM(200, return_sequences=True))
-        _model.add(LSTM(200, return_sequences=True))
+        _model.add(Conv1D(500, 2, activation='relu'))
+        # _model.add(LSTM(10, return_sequences=True))
         _model.add(GlobalAveragePooling1D())
         _model.add(Dropout(0.5))
         _model.add(Dense(num_classes, activation='softmax'))
@@ -205,16 +233,29 @@ class model():
         #                 monitor='val_loss', save_best_only=True),
         #             keras.callbacks.EarlyStopping(monitor='acc', patience=10)]
 
-        cb_list = [keras.callbacks.ModelCheckpoint(
-                        filepath='best_model.{epoch:02d}-{val_loss:.2f}.h5',
-                        monitor='val_loss', save_best_only=True)]
+        cb_list = [keras.callbacks.TensorBoard(log_dir='/tmp/alhena2_lstm/tb')]
 
         self._model.fit(x, y, \
                         batch_size=self._batches,
                         epochs=self._epochs,
                         callbacks=cb_list,
                         validation_split=self._split,
+                        shuffle=True,
                         verbose=self._verbose)
+
+    def save(self, file):
+        return self._model.save_weights(file)
+
+    def predict(self, x):
+        return self._model.predict(np.expand_dims(x, axis=0))
+
+def validation(m, test_x, test_y):
+    for (i, x) in enumerate(test_x):
+        pred_y = m.predict(x)
+
+        if np.argmax(test_y[i]) != np.argmax(pred_y):
+            print(x)
+            print((test_y[i], pred_y))
 
 def main():
     parser = arg.ArgumentParser(description='''LSTM under Alhena2''')
@@ -232,10 +273,13 @@ def main():
     ds = data_set(_formula, category=_category)
     ds.load()
 
-    (x, y) = ds.processing()
+    (x, y, test_x, test_y) = ds.processing()
 
     m = model((x.shape[1], x.shape[2]), y.shape[1])
     m.fit(x, y)
+    m.save('lstm_weights.h5')
+
+    validation(m=m, test_x=test_x, test_y=test_y)
 
     return ds
 
