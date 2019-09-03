@@ -38,7 +38,7 @@ def main():
     parser.add_argument('-q', '--quarter', default=None, type=str, nargs='?', \
                         help="quarter in ['Mar', 'Jun', 'Sep', 'Dec']")
     parser.add_argument('-s', '--start', default='2000-01-01', type=str, help='start date')
-    parser.add_argument('--disable-TTM', dest='TTM', default=True, action='store_false', help='TTM off')
+    parser.add_argument('--season_mode', dest='season', default='TTM', help='season mode')
     parser.add_argument('key', default=None, type=str, nargs='+', help='key to extract')
 
     # runtime
@@ -50,7 +50,7 @@ def main():
     _path    = parser.parse_args().path
     _quarter = parser.parse_args().quarter
     _start   = parser.parse_args().start
-    _TTM     = parser.parse_args().TTM
+    _season  = parser.parse_args().season
     _key     = parser.parse_args().key
 
     if not _formula is None and os.path.exists(_formula):
@@ -66,7 +66,7 @@ def main():
     else:
         _symbols = _key
 
-    report = cn_report(path=_path, symbols=_symbols, start=_start, TTM=_TTM, quarter=_quarter, \
+    report = cn_report(path=_path, symbols=_symbols, start=_start, season_mode=_season, quarter=_quarter, \
                        language=language)
     df = report.get(formulas=_formula)
 

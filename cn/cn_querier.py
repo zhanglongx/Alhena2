@@ -88,8 +88,10 @@ class cn_report(_base_querier):
             representations (e.g., 'JAN-01-2010', '1/1/10', 'Jan, 1, 1980')
         end: string, (defaults to today)
             Ending date, timestamp. Same format as starting date.
-        TTM: boolen, (default to false)
-            TTM mode on, all profit data will be get as TTM
+        season_mode: {str, None}, if is not None, must be one of ['TTM', 'season']
+            season: treat as one season
+            ttm: accumulated season as one year
+            None: none
         quarter: {str}, one of ['Mar', 'Jun', 'Sep', 'Dec', None]
             quarter selected
         add_lasted: boolen
@@ -113,7 +115,11 @@ class cn_report(_base_querier):
             raise OSError('%s not exists, run `reader.py build` to build one' \
                           % self._database)
 
-        self._TTM_on = kwargs.pop('TTM', False)
+        self._season_mode = kwargs.pop('season_mode', 'TTM')
+        if self._season_mode is None or self._season_mode in ['TTM', 'season']:
+            pass
+        else:
+            raise KeyError('%s is not support' % self._season_mode)
 
         # select quarter
         _quarter = kwargs.pop('quarter', None)
@@ -196,7 +202,7 @@ class cn_report(_base_querier):
 
         _report = _report.reset_index(-1).groupby(level=SYMBOLS).apply(_resampler)
 
-        if self._TTM_on:
+        if self._season_mode is not None:
             _report = self._run_TTM(_report)
 
         _report = _report.groupby([SYMBOLS, self._quarter_grp]).last()
@@ -237,7 +243,12 @@ class cn_report(_base_querier):
         def __add(x):
             return x + x.shift(1) + x.shift(2) + x.shift(3)
 
-        _report = _report.groupby(level=0).apply(__add)
+        if self._season_mode == 'TTM':
+            _report = _report.groupby(level=0).apply(__add)
+        else:
+            # season
+            pass
+
         report[PROFIT_TAB] = _report
 
         return report
