@@ -13,9 +13,11 @@ from cn.cn_querier import (cn_info, cn_report)
 
 def _sanitate_key(key):
     if not isinstance(key, list):
-        raise KeyError
+        raise TypeError
 
-    if len(key) == 1:
+    if len(key) == 0:
+        return None
+    elif len(key) == 1:
         return key[0]
 
     # first as symbols
@@ -39,7 +41,7 @@ def main():
                         help="quarter in ['Mar', 'Jun', 'Sep', 'Dec']")
     parser.add_argument('-s', '--start', default='2000-01-01', type=str, help='start date')
     parser.add_argument('--season_mode', dest='season', default='TTM', help='season mode')
-    parser.add_argument('key', default=None, type=str, nargs='+', help='key to extract')
+    parser.add_argument('key', default=None, type=str, nargs='*', help='key to extract')
 
     # runtime
     pd.set_option('display.max_columns', None)
