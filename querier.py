@@ -74,7 +74,7 @@ def main():
 
     def __PEG(df):
         try: 
-            df.loc[df['profit%'] < 0, 'profit%'] = np.NaN
+            df.loc[df['PE'] < 0, 'PE'] = np.inf
             df['PEG'] = df['PE'] / (df['profit%'] * 100)
         except:
             pass
