@@ -12,24 +12,26 @@ from _utils import(_mkdir_cache, _read_buffer)
 from _network import(_endless_get)
 from _const import(DATABASE_FILENAME)
 
+TUSHARE_TOKEN = 'f4673f7862e73483c5e65cd9a036eedd39e72d484194a85dabcf958b'
+
 URL_REPORT_T = 'http://money.finance.sina.com.cn/corp/go.php/vDOWN_%s/displaytype/4/stockid/%s/ctrl/all.phtml'
-URL_DAILY_T  = 'http://money.finance.sina.com.cn/corp/go.php/vMS_MarketHistory/stockid/%s.phtml?year=%d&jidu=%d'
 URL_XDR_T    = 'http://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/%s.phtml'
 
-DAILY_TAB_MATCH = '季度历史交易'
 XDR_TAB_MATCH = '分红'
 REPORT_DATE = '报表日期'
 UNIT = '单位'
 PLANE = '进度'
 CARRIED = '实施'
-CLOSE = '收盘价'
+CLOSE = 'close'
+TS_CODE = 'ts_code'
+TS_DATE = 'trade_date'
 
 BOUNS = '送股(股)'
 GIFT = '转增(股)'
 DONATION = '派息(税前)(元)'
 
 XDR_COLS = [BOUNS, GIFT, DONATION, '进度']
-PRICE_COLS = ['开盘价', '最高价', '收盘价', '最低价']
+PRICE_COLS = ['open', 'high', 'close', 'low']
 
 CN     = 'cn'
 INFO   = 'info'
@@ -76,6 +78,8 @@ class cn_reader(_base_reader):
         # network utils
         self._skip_time = kwargs.pop('skip_time', 30)
         self._skip_size = kwargs.pop('skip_size', 10)
+
+        self._pro_tushare = None
 
         # XXX: self._symbols will be changed in self.update()
         if isinstance(self._symbols, (str, int)):
@@ -288,71 +292,34 @@ class cn_reader(_base_reader):
         if not os.path.exists(_symbol_folder):
             os.mkdir(_symbol_folder)
 
-        old = None
-        if force != True:
+        if self._pro_tushare is None:
+            self._pro_tushare = ts.pro_api(TUSHARE_TOKEN)
+
+        def _sym_tushare(s):
+            if int(s) > 0 and int(s) < 600000:
+                s += '.SZ'
+            else:
+                s += '.SH'
+
+            return s
+
+        _daily = None
+        while _daily is None:
             try:
-                old = self._read_one_daily(symbol, xdr=None)
-            except OSError:
-                pass
-
-        def __season(m):
-            if not m in range(1, 13):
-                raise ValueError('m: %d is not valid' % m)
-            return (m-1) // 3 + 1
-
-        def __date_range(start, end):
-            e_year   = int(end.split('-')[0])
-            s_year   = int(start.split('-')[0])
-            s_season = __season(int(start.split('-')[1]))
-
-            for y in reversed(range(s_year, e_year+1)):
-                if y == e_year:
-                    e_season = __season(int(end.split('-')[1]))
-                else:
-                    e_season = 4
-                for s in reversed(range(1, e_season+1)):
-                    if not (y == s_year and s < s_season):
-                        yield (y, s)
-
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-
-        tables = []
-        if not old is None:
-            start = pd.to_datetime(str(old.index.values[-1])).strftime('%Y-%m-%d')
-            tables.append(old)
-        else:
-            # pre read to get start
-            (y, s) = (int(today.split('-')[0]), __season(int(today.split('-')[1])))
-            url = url = URL_DAILY_T % (symbol, y, s)
-
-            try:
-                (text, raw) = _endless_get(url, None, 'gb2312')
-                soup = bs4.BeautifulSoup(text, features='lxml')
-                tags = soup.find_all('select', attrs={'name': 'year'})[0]
-                _ = tags.text.splitlines()[-1]
-                start = '%s-01-01' % _
+                _daily = self._pro_tushare.daily(ts_code=_sym_tushare(symbol))
             except:
-                start = '1991-01-01'
-            
-        for (y, s) in __date_range(start=start, end=today):
-            url = URL_DAILY_T % (symbol, y, s)
+               time.sleep(60) 
 
-            season = self._wrapper_read_html(url, log='daily_%s_%d_%d.log' % (symbol, y, s), \
-                                             match=DAILY_TAB_MATCH, header=0, \
-                                             index_col=0, skiprows=1, parse_dates=True)
-            if season is None:
-                continue
-
-            tables.append(season[0])
+        _daily.drop(axis=1, columns=[TS_CODE], inplace=True)
+        _daily[TS_DATE] = _daily[TS_DATE].apply(lambda x: re.sub(r'^(\d\d\d\d)(\d\d)(\d\d)', r'\1-\2-\3', x))
+        _daily.set_index(keys=TS_DATE, inplace=True)
 
         file = os.path.join(self._path[DAILY], symbol, 'daily.csv')
+        _daily.to_csv(file, sep=',', encoding=self._encoding)
 
-        new = pd.concat(tables).drop_duplicates()
-        new.sort_index(ascending=False, inplace=True) # descending for easy-reading
-        new.to_csv(file, sep=',', encoding=self._encoding)
 
         # xdr
-        xdr = self._wrapper_read_html(URL_XDR_T % symbol, log='xdr_%s_%d.log' % (symbol, y), \
+        xdr = self._wrapper_read_html(URL_XDR_T % symbol, log='xdr_%s.log' % (symbol), \
                                       header=2, index_col=5, \
                                       attrs={'id': 'sharebonus_1'}, parse_dates=True)[0]
 
