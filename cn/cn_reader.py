@@ -209,7 +209,7 @@ class cn_reader(_base_reader):
         kwargs:
             see pd_read_html
         '''
-        (text, raw) = _endless_get(url, None, encoding)
+        (text, _) = _endless_get(url, None, encoding)
         try:
             df = pd.read_html(text, **kwargs)
         except ValueError:
@@ -498,7 +498,6 @@ class cn_reader(_base_reader):
             # concat to append xdr dates
             daily = pd.concat([daily, xdr_df], axis=1)
 
-            s = None
             for e in list(xdr_df.index.values):
 
                 _bouns = xdr_df.loc[e, BOUNS] / 10
@@ -508,8 +507,6 @@ class cn_reader(_base_reader):
                 if np.isnan(daily.loc[e, CLOSE]):
                     daily.loc[e, PRICE_COLS] = daily.shift(1).loc[e, PRICE_COLS]
                     daily.loc[e, PRICE_COLS] = daily.loc[e, PRICE_COLS].apply(lambda x: (x - _dona) / (1 + _gift + _bouns))
-
-                s = e
                 
         return daily
 
