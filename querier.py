@@ -13,23 +13,26 @@ import matplotlib.ticker as ticker
 
 from cn.cn_querier import (cn_info, cn_report)
 
-def _sanitated_key(key):
-    if not isinstance(key, list):
+def _sanitated_key(path, keys):
+    '''
+    sanitates keys
+    @params:
+    path: {str}
+        path
+    keys: {list}
+        keys
+    '''
+    if not isinstance(keys, list):
         raise TypeError
 
-    if len(key) == 0:
-        return None
-    elif len(key) == 1:
-        return key[0]
+    _info = cn_info(path=path)
 
-    # first as symbols
-    _s = [k for k in key if re.match(r'\d+$', k)]
+    _symbols = []
+    [_symbols.extend(_info.get(key=k)) for k in keys]
+    if len(_symbols) >= len(_info.get(key=None)):
+        raise ValueError('too many symbols, check input keys')
 
-    if len(_s) > 0:
-        return _s
-    else:
-        # TODO
-        raise ValueError('only symbols as list supported now')
+    return _symbols
 
 class plot():
     def __init__(self, file):
@@ -128,8 +131,8 @@ def main():
     _season  = parser.parse_args().season
     _key     = parser.parse_args().key
 
-    _key = _sanitated_key(_key) 
-    _plot = None
+    _symbols = _sanitated_key(path=_path, keys=_key) 
+    _plot    = None
 
     if not _formula is None and os.path.exists(_formula):
         _plot = plot(_formula)
@@ -137,14 +140,6 @@ def main():
         _drop = True
 
     language = 'CN' if not _en else 'EN'
-
-    if isinstance(_key, str):
-        _symbols = cn_info(path=_path).get(key=_key)
-    else:
-        _symbols = _key
-
-    if _toplot and len(_symbols) != 1:
-        raise ValueError('symbols is too may for plotting')
 
     report = cn_report(path=_path, symbols=_symbols, start=_start, season_mode=_season, quarter=_quarter, \
                        language=language)
@@ -157,12 +152,16 @@ def main():
         except:
             pass
 
-    # __PEG(df)
+    __PEG(df)
 
+    # only one level
     if len(df.index.levels[0]) == 1 and _drop:
         df.index = df.index.droplevel(0)
 
-    if _plot is not None and _toplot:
+    if len(_symbols) > 0:
+        df = df.groupby(level=-1).median()
+
+    if _toplot and _plot is not None:
         _plot.plt(df=df)
 
     df.to_csv('t.csv')
