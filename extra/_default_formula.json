@@ -1,8 +1,33 @@
 {
-    "PB": "close * 实收资本（或股本）/ 归属于母公司股东权益合计",
-    "PE": "close * 实收资本（或股本）/ 归属于母公司所有者的净利润",
-    "profit": "归属于母公司所有者的净利润",
-    "profit%": "归属于母公司所有者的净利润",
-    "cash_ratio": "经营活动产生的现金流量净额 / 归属于母公司所有者的净利润",
-    "close": "close"
+    "items": [
+        {
+            "name": "PE",
+            "formula": "close * 实收资本（或股本）/ 归属于母公司所有者的净利润",
+            "kind" : "line"
+        },
+        {
+            "name": "PB",
+            "formula": "close * 实收资本（或股本）/ 归属于母公司股东权益合计",
+            "kind" : "line"
+        },
+        {
+            "name": "profit",
+            "formula": "归属于母公司所有者的净利润",
+            "kind" : "bar"
+        },
+        {
+            "name": "gross",
+            "formula": "(营业收入 - 营业成本) / 营业收入",
+            "kind" : "line"
+        },
+        {
+            "name": "cash_ratio",
+            "formula": "经营活动产生的现金流量净额 / 归属于母公司所有者的净利润",
+            "kind" : "line"
+        },
+        {
+            "name": "close",
+            "formula": "close"
+        }
+    ]
 }

@@ -272,7 +272,7 @@ class cn_report(_base_querier):
 
         _report = self._report
 
-        def __caculate(left, right):
+        def __calculate(left, right):
 
             right = re.sub(r'([^- %+*\/\(\)\d]+)',
                            r'_report["\1"]',
@@ -286,9 +286,9 @@ class cn_report(_base_querier):
             _ = re.match(r'(.*)%', f)
             if _:
                 f = _[1]
-                __caculate(f, formulas[_[0]])
+                __calculate(f, formulas[_[0]])
                 _report[_[0]] = _report[f].groupby(level=0).apply(lambda x: x.pct_change())
             else:
-                __caculate(f, formulas[f])
+                __calculate(f, formulas[f])
 
         return _report[list(formulas.keys())]
