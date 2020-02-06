@@ -16,6 +16,10 @@
             "kind" : "bar"
         },
         {
+            "name": "profit%",
+            "formula": "归属于母公司所有者的净利润"
+        },
+        {
             "name": "gross",
             "formula": "(营业收入 - 营业成本) / 营业收入",
             "kind" : "line"

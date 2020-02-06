@@ -1,6 +1,6 @@
 # coding: utf-8
 
-import os
+import os, warnings
 import re
 import json
 import argparse
@@ -30,7 +30,7 @@ def _sanitated_key(path, keys):
     _symbols = []
     [_symbols.extend(_info.get(key=k)) for k in keys]
     if len(_symbols) >= len(_info.get(key=None)):
-        raise ValueError('too many symbols, check input keys')
+        warnings.warn('too many symbols, check input keys')
 
     return _symbols
 
@@ -65,14 +65,16 @@ class plot():
             df contains data to plot
         '''
         _, axes = plt.subplots(nrows=layout, ncols=layout)
-        for i, _ in enumerate(self._json['items']):
+        n = 0
+        for _ in self._json['items']:
             if 'kind' not in _:
                 continue
 
-            if i >= layout ** 2:
-                raise ValueError('items > %d' % layout)
+            if n + 1 >= layout ** 2:
+                raise ValueError('items > %d' % layout ** 2)
 
-            _ax = axes[int(i//layout), int(i%layout)]
+            _ax = axes[int(n//layout), int(n%layout)]
+            n += 1
 
             # kwargs for pd.Dataframe.plot
             kwargs = dict({'kind': _['kind']})
@@ -107,9 +109,9 @@ def main():
     parser = argparse.ArgumentParser(description='''wrapper for Alhena2 querier''')
 
     parser.add_argument('-c', '--csv', dest='csv', action='store_true', help='csv output')
-    parser.add_argument('-d', '--drop', dest='drop', action='store_true', help='drop symbol if only one')
     parser.add_argument('-e', '--en', action='store_true', default=False, help='turn language en on')
     parser.add_argument('-f', '--formula', type=str, nargs='?', help='formula or file input (.json)')
+    parser.add_argument('-g', '--group', dest='group', action='store_true', help='drop symbol if only one')
     parser.add_argument('-p', '--path', default='.', type=str, nargs='?', help='Alhena2 path')
     parser.add_argument('-q', '--quarter', default=None, type=str, nargs='?', \
                         help="quarter in ['Mar', 'Jun', 'Sep', 'Dec']")
@@ -121,9 +123,9 @@ def main():
     # runtime
     pd.set_option('display.max_columns', None)
 
-    _drop    = parser.parse_args().drop
     _en      = parser.parse_args().en
     _formula = parser.parse_args().formula
+    _group   = parser.parse_args().group
     _path    = parser.parse_args().path
     _quarter = parser.parse_args().quarter
     _start   = parser.parse_args().start
@@ -137,7 +139,10 @@ def main():
     if not _formula is None and os.path.exists(_formula):
         _plot = plot(_formula)
         _formula = _plot.formula()
-        _drop = True
+
+        if _toplot and _group == False:
+            warnings.warn('plotting requires groupby, setting it automatically')
+            _group = True
 
     language = 'CN' if not _en else 'EN'
 
@@ -155,10 +160,7 @@ def main():
     __PEG(df)
 
     # only one level
-    if len(df.index.levels[0]) == 1 and _drop:
-        df.index = df.index.droplevel(0)
-
-    if len(_symbols) > 0:
+    if _group and len(df.index.levels) > 1:
         df = df.groupby(level=-1).median()
 
     if _toplot and _plot is not None:
